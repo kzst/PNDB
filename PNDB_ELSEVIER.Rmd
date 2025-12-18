@@ -1,0 +1,1395 @@
+---
+title: Exploring Network-Level Indicators for Project Analysis - A Comparison of Real and Synthetic Projects
+author:
+  - name: Zsolt T. Kosztyán
+    email: kosztyan.zsolt@gtk.uni-pannon.hu
+    affiliation: University of Pannonia, Institute of Advanced Studies Kőszeg
+    correspondingauthor: true
+abstract: |
+  This study introduces a novel perspective on project network analysis by incorporating network theory and graph analysis to identify network-level indicators for activity-on-node project networks. A key contribution lies in the comparison between real and synthetic projects on the basis of project and network-level indicators, revealing distinct variations. The findings underscore that real projects demonstrate lower flexibility and efficiency than synthetic counterparts, impacting project scheduling and resource allocation. Moreover, the study suggests employing supervised and unsupervised learning classification methods to categorize projects on the basis of indicator values, enhancing project selection and prioritization processes. By bridging the gap between network-level indicators and project aspects, this research enriches the literature by offering fresh insights and resources for project managers to optimize project network structure and performance.
+keywords: 
+  - network indicators
+  - project database
+  - synthetic projects
+  - real project structures
+journal: "Journal of Computational Science"
+date: "`r Sys.Date()`"
+linenumbers: false
+numbersections: true
+bibliography: bibliography.bib
+biblio-style: elsarticle-num-names # author year style for natbib - use 'elsarticle-num' or 'elsarticle-num-names' for numbered scheme
+classoption: preprint, 3p # remove authoryear is not using `elsarticle-harv`
+# Use a CSL with `citation_package = "default"`
+# csl: https://www.zotero.org/styles/elsevier-harvard
+output: 
+  rticles::elsevier_article:
+    keep_tex: true
+    citation_package: natbib
+header-includes: |
+  \usepackage{subfig}
+  \usepackage{float}
+  \usepackage[utf8]{inputenc}
+  \usepackage{appendix}
+  \renewcommand{\appendixname}{Supplementary Material}
+  \renewcommand{\thesection}{\arabic{section}}
+  \DeclareUnicodeCharacter{3B1}{\ensuremath{\alpha}}
+  \usepackage{multibib}
+  \newcites{supp}{Supplementary References}
+  \let\<\textless
+  \let\>\textgreater
+---
+\sloppy
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE,
+                      out.extra = "")  # This forces knitr to label all figures.
+knitr::knit_hooks$set(crop = knitr::hook_pdfcrop)
+knitr::opts_chunk$set(fig.pos = "H", out.extra = "")
+knitr::opts_chunk$set(echo = FALSE, fig.path = "")
+options(knitr.kable.NA = '')
+```
+
+```{r,warning=FALSE,message=FALSE,echo=FALSE}
+# For file I/O-s
+library(readxl) # For reading excel files
+
+# For the data preparation and manipulation
+library(xfun) # For converting numbers to words
+library(stringr) # For string manipulation
+
+# For descriptive statistics and for variance analysis
+library(DescTools) # For descriptive statistics
+library(car) # For ANOVA
+
+# For clustering and unsupervised learning
+library(nda) # For clustering 
+library(MASS) # For multidimensional scaling
+
+# For supervised learning
+library(Boruta) # For Boruta
+library(randomForest) # For Random Forest methods
+
+# For representing data tables
+library(knitr) # To provide latex tables
+library(kableExtra) # To provide latex tables
+
+# For representing figures
+library(ggplot2) # To provide figures
+library(ggrepel) # To provide figures
+library(plotly) # To provide figures
+library(scales) # For visualizations
+
+# For matrix-based project planning
+library(mfpp) # For visualizations
+
+library(caret) # For calculating the confusion matrix.
+
+library(cluster) # For claculating silhouette measures
+```
+
+```{r tablefunctions,warning=FALSE,message=FALSE,echo=FALSE}
+tokable <- function(D,subtitle,escape=FALSE,fontsize=8) {
+  tokable<-kable(D,digits = Inf,format="latex",booktabs=TRUE,longtable=FALSE,escape = escape,linesep="") %>% row_spec(0,bold=TRUE) %>% column_spec(1,bold=TRUE)  %>% footnote(general=paste("\\\\\\centering",subtitle,sep=" "),general_title = "", threeparttable = TRUE,escape = escape) %>% kable_styling(latex_options = c("striped","repeat_header"),full_width = FALSE,font_size = fontsize) %>% kable_paper()  
+}
+```
+
+
+```{r,warning=FALSE,message=FALSE,echo=FALSE}
+#Load libraries
+DATA<-read_excel("indicators.xlsx")
+DESCRIPTION<-read_excel("DESCRIPTION.xlsx")
+rownames(DESCRIPTION)<-DESCRIPTION$ID
+rownames(DATA)<-DATA$filename
+
+DATA1<-DATA[DATA$MODE==1,]
+rownames(DATA1)<-rownames(DATA)[DATA$MODE==1]
+rownames(DATA1)<-str_sub(rownames(DATA1),0,str_locate(rownames(DATA1),'_')[,1]-1)
+
+SYNDATA<-DATA[DATA$synthetic==1,]
+rownames(SYNDATA)<-rownames(DATA)[DATA$synthetic==1]
+
+SYNDATA1<-SYNDATA[SYNDATA$MODE==1,]
+rownames(SYNDATA1)<-rownames(SYNDATA)[SYNDATA$MODE==1]
+rownames(SYNDATA1)<-str_sub(rownames(SYNDATA1),0,str_locate(rownames(SYNDATA1),'_')[,1]-1)
+
+
+SYNDATA2<-SYNDATA[SYNDATA$MODE==2,]
+rownames(SYNDATA2)<-rownames(SYNDATA)[SYNDATA$MODE==2]
+rownames(SYNDATA2)<-str_sub(rownames(SYNDATA2),0,str_locate(rownames(SYNDATA2),'_')[,1]-1)
+
+
+SYNDATA3<-SYNDATA[SYNDATA$MODE==3,]
+rownames(SYNDATA3)<-rownames(SYNDATA)[SYNDATA$MODE==3]
+rownames(SYNDATA3)<-str_sub(rownames(SYNDATA3),0,str_locate(rownames(SYNDATA3),'_')[,1]-1)
+
+
+SYNDATA4<-SYNDATA[SYNDATA$MODE==4,]
+rownames(SYNDATA4)<-rownames(SYNDATA)[SYNDATA$MODE==4]
+rownames(SYNDATA4)<-str_sub(rownames(SYNDATA4),0,str_locate(rownames(SYNDATA4),'_')[,1]-1)
+
+
+PROJDATA<-DATA[DATA$synthetic==0,]
+rownames(PROJDATA)<-rownames(DATA)[DATA$synthetic==0]
+rownames(PROJDATA)<-str_sub(rownames(PROJDATA),0,str_locate(rownames(PROJDATA),'_')[,1]-1)
+
+DATA2<-rbind(SYNDATA2,PROJDATA)
+DATA3<-rbind(SYNDATA2,PROJDATA)
+DATA4<-rbind(SYNDATA2,PROJDATA)
+
+
+data<-matrix(as.numeric(as.matrix(DATA[,-(1:5)])),ncol=ncol(DATA)-5)
+colnames(data)<-colnames(DATA)[-(1:5)]
+rownames(data)<-rownames(DATA)
+
+data1<-matrix(as.numeric(as.matrix(DATA1[,-c(1:5,46)])),ncol=ncol(DATA1)-6)
+colnames(data1)<-colnames(DATA1)[-c(1:5,46)]
+rownames(data1)<-rownames(DATA1)
+
+syndata<-matrix(as.numeric(as.matrix(SYNDATA[,-(1:5)])),ncol=ncol(SYNDATA)-5)
+colnames(syndata)<-colnames(SYNDATA)[-(1:5)]
+rownames(syndata)<-rownames(SYNDATA)
+
+syndata1<-matrix(as.numeric(as.matrix(SYNDATA1[,-c(1:5,46)])),ncol=ncol(SYNDATA1)-6)
+colnames(syndata1)<-colnames(SYNDATA1)[-c(1:5,46)]
+rownames(syndata1)<-rownames(SYNDATA1)
+
+syndata2<-matrix(as.numeric(as.matrix(SYNDATA2[,-c(1:5,46)])),ncol=ncol(SYNDATA2)-6)
+colnames(syndata2)<-colnames(SYNDATA2)[-c(1:5,46)]
+rownames(syndata2)<-rownames(SYNDATA2)
+
+syndata3<-matrix(as.numeric(as.matrix(SYNDATA3[,-c(1:5,46)])),ncol=ncol(SYNDATA3)-6)
+colnames(syndata3)<-colnames(SYNDATA3)[-c(1:5,46)]
+rownames(syndata3)<-rownames(SYNDATA3)
+
+syndata4<-matrix(as.numeric(as.matrix(SYNDATA4[,-c(1:5,46)])),ncol=ncol(SYNDATA4)-6)
+colnames(syndata4)<-colnames(SYNDATA4)[-c(1:5,46)]
+rownames(syndata4)<-rownames(SYNDATA4)
+
+projdata<-matrix(as.numeric(as.matrix(PROJDATA[,-c(1:5,46)])),ncol=ncol(PROJDATA)-6)
+colnames(projdata)<-colnames(PROJDATA)[-c(1:5,46)]
+rownames(projdata)<-rownames(PROJDATA)
+
+data_xy<-matrix(as.numeric(as.matrix(DATA[,-c(1:3,5)])),ncol=ncol(DATA)-4)
+colnames(data_xy)<-colnames(DATA)[-c(1:3,5)]
+rownames(data_xy)<-rownames(DATA)
+
+data1_xy<-matrix(as.numeric(as.matrix(DATA1[,-c(1:3,5,46)])),ncol=ncol(DATA1)-5)
+colnames(data1_xy)<-colnames(DATA1)[-c(1:3,5,46)]
+rownames(data1_xy)<-rownames(DATA1)
+
+data2_xy<-matrix(as.numeric(as.matrix(DATA2[,-c(1:3,5,46)])),ncol=ncol(DATA2)-5)
+colnames(data2_xy)<-colnames(DATA2)[-c(1:3,5,46)]
+rownames(data2_xy)<-rownames(DATA2)
+
+data3_xy<-matrix(as.numeric(as.matrix(DATA3[,-c(1:3,5,46)])),ncol=ncol(DATA3)-5)
+colnames(data3_xy)<-colnames(DATA3)[-c(1:3,5,46)]
+rownames(data3_xy)<-rownames(DATA3)
+
+data4_xy<-matrix(as.numeric(as.matrix(DATA4[,-c(1:3,5,46)])),ncol=ncol(DATA4)-5)
+colnames(data4_xy)<-colnames(DATA4)[-c(1:3,5,46)]
+rownames(data4_xy)<-rownames(DATA4)
+
+data2<-matrix(as.numeric(as.matrix(DATA2[,-c(1:5,46)])),ncol=ncol(DATA2)-6)
+colnames(data2)<-colnames(DATA2)[-c(1:5,46)]
+rownames(data2)<-rownames(DATA2)
+
+data3<-matrix(as.numeric(as.matrix(DATA3[,-c(1:5,46)])),ncol=ncol(DATA3)-6)
+colnames(data3)<-colnames(DATA3)[-c(1:5,46)]
+rownames(data3)<-rownames(DATA3)
+
+data4<-matrix(as.numeric(as.matrix(DATA4[,-c(1:5,46)])),ncol=ncol(DATA4)-6)
+colnames(data4)<-colnames(DATA4)[-c(1:5,46)]
+rownames(data4)<-rownames(DATA4)
+
+data1_only_net<-data1[,(41:65)]
+data2_only_net<-data2[,(41:65)]
+data3_only_net<-data3[,(41:65)]
+data4_only_net<-data4[,(41:65)]
+
+data1_wo_net<-data1[,-(41:65)]
+data2_wo_net<-data2[,-(41:65)]
+data3_wo_net<-data3[,-(41:65)]
+data4_wo_net<-data4[,-(41:65)]
+
+scaled_data_xy<-scale(data_xy)
+scaled_data_xy[,c(1,42)]<-data_xy[,c(1,42)]
+
+scaled_syndata1<-scaled_data_xy[(data_xy[,"synthetic"]==1)&(data_xy[,"MODE"]==1),][,-c(1,42)]
+scaled_syndata2<-scaled_data_xy[(data_xy[,"synthetic"]==1)&(data_xy[,"MODE"]==2),][,-c(1,42)]
+scaled_syndata3<-scaled_data_xy[(data_xy[,"synthetic"]==1)&(data_xy[,"MODE"]==3),][,-c(1,42)]
+scaled_syndata4<-scaled_data_xy[(data_xy[,"synthetic"]==1)&(data_xy[,"MODE"]==4),][,-c(1,42)]
+scaled_projdata<-scaled_data_xy[(data_xy[,"synthetic"]==0),][,-c(1,42)]
+
+MEANS<-t(rbind(colMeans(scaled_syndata1,na.rm = TRUE),colMeans(scaled_syndata2,na.rm = TRUE),colMeans(scaled_syndata3,na.rm = TRUE),colMeans(scaled_syndata4,na.rm = TRUE),colMeans(scaled_projdata,na.rm = TRUE)))
+colnames(MEANS)<-c("Mode 1","Mode 2","Mode 3","Mode 4","Real")
+
+MEANS<-MEANS[DESCRIPTION$ID,]
+
+MEANS_wo_net<-MEANS[DESCRIPTION$Type!="Network",]
+
+MEANS_only_net<-MEANS[DESCRIPTION$Type=="Network",]
+
+
+MEANS_time<-MEANS[DESCRIPTION$Type=="Time",]
+
+MEANS_resource<-MEANS[DESCRIPTION$Type=="Resource",]
+
+MEANS_logic<-MEANS[DESCRIPTION$Type=="Logic",4:5]
+colnames(MEANS_logic)<-c("Synthetic","Real")
+
+MEANS_network<-MEANS[DESCRIPTION$Type=="Network",4:5]
+colnames(MEANS_network)<-c("Synthetic","Real")
+
+data1_xy_wo_net<-data1_xy[,1:41]
+data1_xy_only_net<-data1_xy[,-c(2:41)]
+```
+
+```{r,warning=FALSE,message=FALSE,echo=FALSE}
+set.seed(1)
+NDA_data<-ndr(as.data.frame(data))
+NDA_syndata<-ndr(as.data.frame(syndata))
+NDA_data1<-ndr(as.data.frame(data1))
+NDA_data2<-ndr(as.data.frame(data2))
+NDA_data3<-ndr(as.data.frame(data3))
+NDA_data4<-ndr(as.data.frame(data4))
+NDA_syndata1<-ndr(as.data.frame(syndata1))
+NDA_syndata2<-ndr(as.data.frame(syndata2))
+NDA_syndata3<-ndr(as.data.frame(syndata3))
+NDA_syndata4<-ndr(as.data.frame(syndata4))
+NDA_projdata<-ndr(as.data.frame(projdata))
+
+NDAT_data<-ndr(1-nda::normalize(as.matrix(dist(data))),covar=TRUE)
+NDAT_data1<-ndr(1-nda::normalize(as.matrix(dist(data1))),covar=TRUE)
+NDAT_data2<-ndr(1-nda::normalize(as.matrix(dist(data2))),covar=TRUE)
+NDAT_data3<-ndr(1-nda::normalize(as.matrix(dist(data3))),covar=TRUE)
+NDAT_data4<-ndr(1-nda::normalize(as.matrix(dist(data4))),covar=TRUE)
+
+NDAT_only_net_data<-ndr(1-nda::normalize(as.matrix(dist(data[,(42:66)]))),covar=TRUE)
+NDAT_only_net_data1<-ndr(1-nda::normalize(as.matrix(dist(data1[,(41:65)]))),covar=TRUE)
+NDAT_only_net_data2<-ndr(1-nda::normalize(as.matrix(dist(data2[,(41:65)]))),covar=TRUE)
+NDAT_only_net_data3<-ndr(1-nda::normalize(as.matrix(dist(data3[,(41:65)]))),covar=TRUE)
+NDAT_only_net_data4<-ndr(1-nda::normalize(as.matrix(dist(data4[,(41:65)]))),covar=TRUE)
+
+NDAT_wo_net_data<-ndr(1-nda::normalize(as.matrix(dist(data[,-(42:66)]))),covar=TRUE)
+NDAT_wo_net_data1<-ndr(1-nda::normalize(as.matrix(dist(data1[,-(41:65)]))),covar=TRUE)
+NDAT_wo_net_data2<-ndr(1-nda::normalize(as.matrix(dist(data2[,-(41:65)]))),covar=TRUE)
+NDAT_wo_net_data3<-ndr(1-nda::normalize(as.matrix(dist(data3[,-(41:65)]))),covar=TRUE)
+NDAT_wo_net_data4<-ndr(1-nda::normalize(as.matrix(dist(data4[,-(41:65)]))),covar=TRUE)
+```
+
+# Introduction {#sec:intro}
+
+The significance of projects is crucial and includes several aspects, such as corporate operations, research, and national economies [@DENIZER2013projGDP]. Within the project management,the project planning problem is a critical challenge in management science and operations research, focusing on efficient scheduling and resource allocation of project activities [@hartmann2022updated]. This complex task involves organizing interconnected activities, managing resources, and optimizing project timelines to achieve the desired outcomes. The significance of project planning extends across various domains, including corporate operations, research initiatives, and national economies. Researchers in Management Science and Operations Research have thoroughly examined project scheduling and resource allocation for more than sixty years [@Franco2019review]. Project databases were suggested as a means to evaluate algorithms, encompassing both simulated [@boctor1993heuristics] and real scenarios [@batselier2015construction], as well as individual [@sprecher1996psplib] or multiple projects [@browning2010random], and single-mode [@patterson1984comparison] or multimode projects [@Vanpeteghem2014]. Nevertheless, the numerous project databases exhibit significant heterogeneity in terms of both the file structure and the characteristics of the represented projects. @kosztyan2023matrix proposed a unified matrix-based project planning (UMP) model, which offers several advantages over existing network-based project planning methods and heterogeneous network-based sources of project plans. UMP provides a unified approach that can seamlessly represent both individual projects and multiprojects portfolios. It is scalable in terms of complexity and is capable of handling both single-mode and multimode project completions. Moreover, UMP's power lies in its ability to collect and integrate most existing projects databases, allowing for comprehensive analysis and comparison across diverse project structures and datasets. This unified framework enables researchers and project managers to conduct more robust and standardized analyses, facilitating better understanding and management of complex project networks. @kosztyan2022mfpp proposed a MATLAB model, and @mfpppkg proposed an R package that can plan different kinds of project scheduling problems. @mfpppkg stores [@boctor1993heuristics]'s synthetic and @batselier2015construction's real-life projects. The logic structure of the project is stored in a logic domain, which is an adjacency matrix of the activity-on-node network of the project plan. Further domains (i.e., submatrices) store the task duration and resource demands by completion mode and resource type.
+
+Owing to the UMP, different types of project databases can be compared to each other. In addition, project networks can be analyzed by network-level indicators. In this paper, we present the following research questions.
+
+\begin{description}
+\item[$\mathbf{RQ}_1$\label{RQ1}] What are the new insights from the proposed network-level indicators for project planning and scheduling?
+\item[$\mathbf{RQ}_2$\label{RQ2}] What is the relationship between the proposed network level and the existing project indicators?
+\item[$\mathbf{RQ}_3$\label{RQ3}] What is the difference between real and synthetic project plans in the case of the project and network-level indicators?
+\end{description}
+
+The investigation of \nameref{RQ1} can facilitate the identification of the prospective advantages and difficulties associated with the utilization of network-level indicators for project planning and scheduling. Network-level indicators refer to metrics that quantify the qualities and attributes of the project network; these metrics include density, diameter, modularity, centrality, resilience, efficiency, and transitivity. Moreover, these metrics offer novel perspectives on the composition and intricacy of the project network, as well as their impact on project performance, risk, and quality. The examination of \nameref{RQ2} can provide insights into the relationships in the network-level indicators and the current project metrics. The existing project indicators encompass many measurements that reflect key features of project management, including duration, resource allocation, and network complexity, order strength, activity distribution, and topological float. These indicators can offer insights into the scope, timing, cost, and logic of the project. An examination of the correlation between network-level indicators and current project indicators, the impact of network properties on project elements can be understood along with the reciprocal influence. Additionally, methods for integrating and for These factors can be aligned to enhance project management. The use of \nameref{RQ3} allows direct comparison and analysis of the project and network-level indicators between real and synthetic project plans. Real project plans are derived from factual data obtained from companies in various industries, whereas synthetic project plans are produced by random network generators. The research goal is to assess the accuracy and usefulness of the simulation model by comparing the actual project plans with synthetic plans. Additionally, we seek to uncover the commonalities and disparities between the real and synthetic project networks.
+
+The research questions were addressed as follows. The background of the study, and the contributions of our study to the literature are as follows: Section \ref{sec:background}. Methods and application materials are as follows: introduced in Section \ref{sec:methods}. In Section \ref{sec:results}, We report the results of the study. In Section \ref{sec:discussion}, we discuss the results of the study. Section \ref{sec:conclusion} provides the summary and conclusions, and finally, Section \ref{sec:limitations} shows the limitations and potential further directions.
+
+# Background of the study {#sec:background}
+
+A multitude of indicators are presented in the literature, as there are continuous endeavors to create novel indicators. Vanhoucke provides a comprehensive summary in @vanhoucke2016overview, and @browning2010resource offer a comprehensive analysis of different projects. @van2020resource and @VANEYNDE2022853 have expanded their research to incorporate indicators for both projects generation and classification.
+
+The existing indicators can be separated into three large groups: (1) *time-related*, (2) *resource-related* and (3) *structural* (i.e.,. *logic*) indicators (see the summary in @van2023summary). The *time-related indicators* measure the duration, schedule, and flexibility of the project activities and the project as a whole. These measures include variables such as average activity duration, critical path length, number and percentage of activities with positive slack, average slack and the slack ratio, and variance in activity duration. They are important because they help to monitor and control project progress, performance, and quality. (2) The *resource-related indicators* measure the allocation, utilization, and diversity of project resources, such as human, material, or financial resources. These variables include the number of renewable resources, alpha distribution of resource strength, the normalized average resource loading factor, and the resource leveling index. Such measures are important because they help optimize project cost, efficiency, and reliability. Finally, (3) *structural (logical) indicators* measure the complexity, order, and density of the project network, which represents the activities and their dependencies in a project. These structural indicators include variables such as the network complexity coefficient, the order strength coefficient, the activity distribution index, the serial/parallel index, the length of the long arcs index, the short arcs index, the topological float index, the total and average activity density, the number of articulation points, and the number of components. These variables are important because they help to understand the structure and logic of the project network while improving project planning and scheduling.
+
+Since structural indicators already incorporate the basic properties of the project network, several network-level indicators are not interpreted in the project network and are not used to describe the logic structure of the project network.
+
+A project network is also a network that is a set of nodes and a set of edges that connect some pairs of nodes. In the case of an Activity-on-Node (AoN) project network, the nodes represent tasks (activities), and the edges represent dependencies. A dependency is a logical relationship that specifies the order or sequence of the tasks. An AoN project network is a directed network in which the edges have a direction that indicates the precedence of the tasks. Such a network is usually a directed acyclic graph (DAG), where there are no cycles or loops in the network; however, our analysis does not require this property.
+
+Project indicators are crucial for delineating project frameworks, for assessing structural intricacy, for estimating length, for identifying idle time, and for determining resource requirements. This information has the potential to significantly impact the performance of the scheduling or resource allocation process [@van2023summary]. Nevertheless, while these indicators are focused on time and resource demands, and there are several indicators that focus on the project structure of the project, to our knowledge, most network-level indicators, such as centralization, modularity, and transitivity are not considered. However, these indicators may provide new insights for the project managers.
+
+The main difference between the proposed network-level and structural indicators is that the network-level indicators are on the basis of network theory and graph analysis, while the structural indicators are on the basis of project management theory and logic analysis. This means that network-level indicators offer a more holistic and dynamic perspective on the project network, whereas the structural indicators offer a greater Detailed and static perspective on the project network. Another The difference between the network-level and structural indicators is that the network-level indicators capture the emergent and nonlinear properties of the project network; these properties include modularity, centrality, resilience, efficiency, and transitivity. The structural indicators capture the deterministic and linear properties of the project network, such as complexity, order, and density. This means that the network-level indicators can reveal the hidden and unexpected patterns and behaviors of the project network, whereas the structural indicators can reveal the explicit and predictable rules and constraints of the project network. For the structural indicators, it is assumed that the project network is homogeneous, independent, and static; this assumption may not reflect the reality of a complex and dynamic project environment. Network-level indicators can address these limitations by incorporating heterogeneity, interactivity, and adaptability of the project network, which can lead to more realistic and robust project network analysis.
+
+To compare different kinds of project databases, we used the UMP model. However, because of the focus on the project indicators, we consider only logic (LD), time (TD) and (renewable) resource domains (RD), which store the AoN project network, the time and the resource demands.
+
+This study makes three contributions to the literature.
+
+\begin{description}
+\item[$\mathbf{C}_1$\label{C1}] We interpret network-level indicators to explain the logical structure of an activity-on-node network, and we demonstrate how these indications can be understood within the framework of a project.
+\item[$\mathbf{C}_2$\label{C2}] We show the effects of the time-related, the resource-related, and the structural project metrics on the suggested network-level indicators.
+\item[$\mathbf{C}_3$\label{C3}] We show that synthetic and real projects exhibit distinct variations in their project and network indicator values. These variables can therefore be employed to categorize projects with supervised and unsupervised learning classification techniques.
+\end{description}
+
+According to the contribution of \nameref{C1}, we propose a new perspective on project network analysis that is on the basis of network theory and graph analysis. Network-level indicators are measures that capture the properties and characteristics of the project network, such as density, diameter, modularity, centrality, resilience, efficiency, and transitivity. These indicators can provide novel insights into how connected, diverse, modular, centralized, resilient, efficient, and cohesive the project network is, and how these factors affect project performance, risk, and quality. Interpreting network-level indicators in context of an activity-on-node network, we show how these indicators can be applied and understood within the framework of a project. Contribution \nameref{C2} regards the relationship between the network-level indicators and the existing project indicators. Existing project indicators are measures that capture the aspects of the project time, resources, and logic. These indicators can provide information about the project scope, schedule, and logic. By showing the effects between the network-level indicators and the existing project indicators, we reveal how the network properties influence and are influenced by the project aspects and how they can be integrated and aligned for better project management. Finally, according to contribution \nameref{C3}, we compare and contrast the real and synthetic project plans in terms of the project and network-level indicators. Real project plans are on the basis of actual data, e.g., from a construction or a service-oriented company, while synthetic project plans are generated by a random network generator. By demonstrating that synthetic and real projects exhibit distinct variations in their project and network indicators values, we evaluate the validity and the applicability of the simulation model. Moreover, we identify the similarities and differences between the real and synthetic project networks. We also demonstrate how these variables can be used to categorize projects with supervised and unsupervised learning classification techniques, which can improve the project selection and prioritization processes. This classification step highlights what are the most different indicators between a real-life and synthetic projects.
+
+To achieve maximal reproducibility, this study used the R programming language. The **rticles** [@rticlespkg] package was utilized to generate the LaTeX code and the corresponding PDF document. All the data and tables are derived from computations. The entire code is provided alongside the publication to enable anyone to replicate the findings. The following R packages are used in the paper: To read the descriptive files of the indicators we used the **readxl** package [@readxlpkg]. For the data preparation and manipulation, we used the **xfun** [@xfunpkg], **stringr** [@stringrpkg] packages. For descriptive statistics, we used the **DescTools** package [@DescToolspkg] and for analysis of variance (ANOVA), we applied the **car** package [@carpkg]. For the cluster analysis and unsupervised learning, we used the package **nda** [@kosztyan2023network] and to calculate the multidimensional scaling, we used the **MASS** package [@MASSpkg]. To measure the average of the silhouette meusure, we used **cluster** package [@clusterpkg]. In the case of supervised learning, we used **Boruta** [@Borutapkg] to calculate relevant indicators, and we used the **randomForest** package [@randomForestpkg] to calculate variable importance. To calculate accuracy measures on the basis of the confusion matrix, we used **caret** package [@caretpkg]. To construct the data tables, we used the **knitr** package [@knitrpkg] and the **kableExtra** package [@kableExtrapkg]. To manipulate the figures, we used the **scales** packages [@scalespkg], and to present figures, we used the **ggplot2** [@ggplot2pkg], **ggrepel** [@ggrepelpkg], and **plotly** [@plotlypkg] packages. For the remaining functions, we used **base** [@basepkg] and **stats** [@statspkg] packages. Matrix-based project plans for network analysis were produced by the **mfpp** [@mfpppkg] package and analyzed by the **igraph** [@igraphpkg] and
+**brainGraph** [@braingraphpkg] packages.
+
+# Material and methods {#sec:methods}
+
+In this section we introduce the applied datasets (see Section \ref{subsec:data}) and we provide the applied indicators (see Section \ref{subsec:methods}) and methods (see Section \ref{subsec:algorithms}).
+
+## Employed datasets {#subsec:data}
+
+@kosztyan2023matrix proposed a unified matrix-based project planning (UMP) model to collect heterogeneous project datasets, which are used in the resource-constrained project scheduling problem. The UMP is a multidomain mapping matrix (MDM) model [@Danilovic2007], which considers two mandatory (logic and time) and four supplementary (cost, quality, renewable resources and nonrenewable resources) domains. Existing indicators focus on durations, resource demands and logic structures; Therefore, only three domains are employed, such as logic domain (LD), time domain (TD) and the renewable resource domain (RD). The Table \ref{tab:UMP} shows the realized model of the UMP. We used @boctor1993heuristics's datasets, in which there were 240 original instances. This is a synthetic project dataset, and all project plans contain four possible completion modes. @batselier2015construction's datasets are on the basis of real-life Projects, which contains 133 real project networks with only one completion mode. Despite @batselier2015construction's dataset including task costs, synthetic project networks usually neglect costs or consider costs as a nonrenewable resource. Since @boctor1993heuristics's dataset did not specify nonrenewable resources and since the existing project indicators focus only on time-related, resource-related and structural indicators, we used only three domains for the UMP; see Table \ref{tab:UMP}.
+
+\begin{table}[h!]
+\centering
+\caption{Applied matrix-based model}
+\label{tab:UMP}
+\begin{tabular}{r|rrrr|rrr|rrrrrr}
+\toprule
+\textbf{UMP} & \multicolumn{4}{|c }{\textbf{LD}} & \multicolumn{3}{|c }{\textbf{TD}} & \multicolumn{6}{|c}{\textbf{RD}}                \\ \midrule
+    & $a_1$   & $a_2$  & $\cdots$ & $a_n$  & $\mathbf{t}_1$     & $\cdots$  & $\mathbf{t}_m$    & $\mathbf{r}_{11}$  & $\cdots$  & $\mathbf{r}_{1\rho}$  & $\mathbf{r}_{21}$  & $\cdots$ & $\mathbf{r}_{m \rho}$  \\ \midrule
+$a_1$  & 1    & $l_{12}$ & $\cdots$ & $l_{1n}$ & $t_{11}$    & $\cdots$   & $t_{1m}$   & $r_{111}$ & $\cdots$ & $r_{1\rho 1}$ & $r_{211}$ & $\cdots$ & $r_{m \rho 1}$ \\ 
+$a_2$  & 0    & 1   & $\cdots$ & $l_{2n}$ & $t_{21}$    & $\cdots$   & $t_{2m}$   & $r_{112}$ & $\cdots$ & $r_{1\rho 2}$ & $r_{212}$ & $\cdots$ & $r_{m \rho 2}$ \\
+$\vdots$ & $\vdots$  & $\vdots$ & $\ddots$ & $\vdots$ & $\vdots$    & $\vdots$   & $\vdots$   & $\vdots$ & $\vdots$ & $\vdots$  & $\vdots$  & $\vdots$ & $\vdots$  \\
+$a_n$  & 0    & 0   & $\cdots$ & 1   & $t_{n1}$    & $\cdots$   & $t_{nm}$   & $r_{11n}$ & $\cdots$ & $r_{1\rho n}$ & $r_{21n}$ & $\cdots$ & $r_{m\rho n}$ \\ \bottomrule
+\end{tabular}
+\end{table}
+
+**LD** is a mandatory domain that specifies an individual logic structure (i.e., single) or, in a multiproject environment, a set of individual projects. In the case of fixed project structures, the **LD** is binary, where diagonal values are always one, and the binary outdiagonal values specify the adjacency matrix of the given project structure. Nevertheless, UMP enables (1) $0<l_{ii}<1$ relative priority values of the task completion in the diagonal and (2) $0<l_{ij}<1$ flexible dependency values in the outdiagonal. However, in this study we looked at the original project networks, which did not include priorities and flexible dependencies, and even loops and cycles were not included in the networks. Therefore, all $l_{ii}=1$, and $l_{ij}=0$, if $j>i$. **TD** is an $n$ by $m$ matrix domain (submatrix) of positive real values for durations, where $n$ = = number of tasks and $m$ is the number of completion modes. When $m=1$, the project plan is called single-modal, whereas in the case of $m>1$, the project plan is called a multimodal project plan. **RD** is an $n$ by $m\cdot \rho$ domain for the renewable resources of each task, where $\rho$ is the number of renewable resources.
+
+Figure \ref{fig:AoN} shows synthetic (a) and real (b) activity-on-node project structure.
+
+```{r AoN,fig.cap = "Logical structures of synthetic (a) and real (b) project networks",crop=TRUE,fig.align='center',fig.subcap=c(paste(names(Boctor)[1],"logic (AoN) network"),paste(names(Batselier)[8],"logic (AoN) network")),fig.width=2.5,fig.height=2.5,fig.pos="H"}
+par(mar = c(0.1, 0.1,0.1, 0.1)) 
+plot(Boctor[[1]]$PDM_list,type="orig",main="",vertex.label.cex=0.4,edge.arrow.size=0.5)
+par(mar = c(0.1, 0.1,0.1, 0.1)) 
+plot(Batselier[[8]]$PDM_list,type="orig",main="",vertex.label.cex=0.4,edge.arrow.size=0.5)
+```
+
+The two project databases -- Boctor's synthetic dataset and Batselier and Vanhoucke's real project dataset -- are worth choosing for comparison because they provide complementary perspectives on project network structures. Synthetic projects offer a controlled environment with known completion modes and a randomized network properties, serving as a baseline for understanding theoretical project scheduling behaviors. In contrast, real projects reflect practical complexities, constraints, and resource patterns encountered in actual project management. Comparing these datasets reveals significant differences in flexibility, efficiency, connectedness, and resilience, thereby validating the utility of network-level indicators in distinguishing real project characteristics from synthetic approximations. This comparison enables the calibration and improvement of simulation models and enhances project selection and prioritization methods that are on the basis of more realistic network features. To further improve this argument, one could explicitly highlight how the combined use of These datasets help in identifying specific network-level indicators that are robust and generalizable across both synthetic and real contexts, thus reinforcing the empirical and practical relevance of the research contributions. Further databases can be obtained from @kosztyan2024compound.
+
+## Applied methods and indicators {#subsec:methods}
+
+The existing project indicators can be distinguished into three clusters: (1) time-related indicators (see Section \ref{subsubsec:timeindicators}), (2) (renewable) resource-related indicators (see Section \ref{subsubsec:resindicators}), and structural or logic indicators (see Section \ref{subsubsec:logicindicators}). The proposed network indicators (see Section \ref{subsubsec:netindicators}) are closest to the structural indicators, but at the same time complement them in many areas.  
+
+### Time-related indicators {#subsubsec:timeindicators}
+
+The time-related indicators can be classified into three groups: (1) *Duration-related indicators*: These indicators measure the average and the variance of the activity durations in a project. They include `r toString(DESCRIPTION["XDUR",c(3)])` (XDUR) and `r toString(DESCRIPTION["VADUR",c(3)])` (VADUR). These indicators are important because they help to estimate the total project time, to identify the critical path, and to assess the uncertainty and risk of the project schedule. (2-3) *Slack-related indicators* and *Free-slack related indicators*: The slack-related indicators measure the amount and the proportion of slack or float in a project. Slack or float is the amount of time an activity can be delayed without affecting the project completion date. These include `r toString(DESCRIPTION["NSLACK",c(3)])` (NSLACK), `r toString(DESCRIPTION["PCTSLACK",c(3)])` (PCTSLACK), `r toString(DESCRIPTION["TOTSLACK_R",c(3)])` (TOTSLACK_R), `r toString(DESCRIPTION["XSLACK",c(3)])` (XSLACK), and `r toString(DESCRIPTION["XSLACK_R",c(3)])` (XSLACK_R). These measures are important because they indicate the degree and the distribution of flexibility or buffer in the project schedule, as well as the potential opportunities for resource leveling or smoothing. The slack-free indicators measure the amount and the proportion of free slack in a project. Free slack is the amount of time an activity can be delayed without affecting the start of any other activity in the project. These measures include `r toString(DESCRIPTION["NFREESLK",c(3)])` (NFREESLK), `r toString(DESCRIPTION["PCTFREESLK",c(3)])` (PCTFREESLK), and `r toString(DESCRIPTION["XFREESLK",c(3)])` (XFREESLK). They are important because they indicate the degree and the distribution of flexibility or buffers for specific activities in the project schedule, and potential opportunities for resource optimization or reallocation.
+
+### Resource-related indicators {#subsubsec:resindicators}
+
+These indicators measure the availability, demand, use, and efficiency of renewable resources (such as labor, equipment, and materials) that are needed to complete the project activities. They help to plan and allocate the resources accordingly, to avoid resource shortages or surpluses, optimizes resource utilization, and identifies resource bottlenecks or gaps. These indicators can be classified into two groups. (1) *Availability and demand indicators*: These indicators measure how many resources are available and how many resources are required for the project activities. These include the `r toString(DESCRIPTION["NRES",c(3)])` (NRES), `r toString(DESCRIPTION["XDMND",c(3)])` (XDMND), `r toString(DESCRIPTION["PCTR",c(3)])` (PCTR), `r toString(DESCRIPTION["RS",c(3)])` (RS), `r toString(DESCRIPTION["A_RS",c(3)])` (A_RS), and `r toString(DESCRIPTION["NARLF",c(3)])` (NARLF). They help to assess the resource feasibility and to identify the resource gaps for the earliest start schedule, which minimizes the project duration and maximizes the resource utilization. (2) *Utilization and efficiency indicators*: These indicators measure how the resources are used and how efficiently they are used for project activities. These included `r toString(DESCRIPTION["RU",c(3)])` (RU), `r toString(DESCRIPTION["XUTIL",c(3)])` (XUTIL), `r toString(DESCRIPTION["GINI",c(3)])` (GINI), `r toString(DESCRIPTION["RC",c(3)])` (RC), `r toString(DESCRIPTION["XCON",c(3)])` (XCON), `r toString(DESCRIPTION["RF",c(3)])` (RF), `r toString(DESCRIPTION["TOTOFACT",c(3)])` (TOTOFACT) and `r toString(DESCRIPTION["TOTUFACT",c(3)])` (TOTUFACT). These variables help to evaluate resource efficiency and to identify the resource bottlenecks or constraints that can cause delays or inefficiencies in the project schedule. They also help to optimize resource allocation by adjusting the resource demand or supply, by levelling or smoothing the resources, by crashing or fast-tracking the activities, or by changing the activity sequence or duration.
+
+Another classification option is whether a schedule is needed to calculate the indicator. (I) The *nonscheduled resource-related indicators* measure resource characteristics without considering the project schedule or the activity start times. These include the NRES, XDMND, RU, PCTR, GINI, RC, RF, and TOTOFACT. They provide a general overview of the resource availability and demand, and the resource distribution and diversity among the activities. (II) The *early-scheduled resource-related indicators* measure the resource characteristics on the basis of the earliest start times of the activities, which minimizes the project duration and maximizes resource utilization. They include XUTIL, RS, A_RS, NARLF, XCON, and TOTUFACT. These measures provide a detailed analysis of resource feasibility and efficiency as well as the resource gaps and bottlenecks for the earliest start schedule.
+
+### Logic indicators {#subsubsec:logicindicators}
+
+Structural (logical) project indicators (see Table \ref{tab:DESCLOGRELIND}) measure the complexity, flexibility, and the interconnectedness of the project network. They help to understand the logic and structure of the project, and how these factors affect the project duration, risk, and resource allocation. The logic indicators can be classified into two groups: (1) The *complexity and flexibility indicators* measure how complex and rigid or how simple and flexible the project network is on the basis of the number and length of the precedent relationships among the activities. These variables include the `r toString(DESCRIPTION["I2",c(3)])` indicator (I2), `r toString(DESCRIPTION["I4",c(3)])` (I4), `r toString(DESCRIPTION["I5",c(3)])` (I5), `r toString(DESCRIPTION["C",c(3)])` (C), `r toString(DESCRIPTION["CNC",c(3)])` (CNC), and `r toString(DESCRIPTION["OS",c(3)])` (OS). Such variables help to assess the uncertainty and variability of the project schedule and the potential opportunities for changing activities sequence or duration. (2) *Interconnectedness and robustness indicators* measure how connected and robust the project network is, on the basis of the number and degree of the nodes and the arcs in the network. These variables include the `r toString(DESCRIPTION["I3",c(3)])` (I3), `r toString(DESCRIPTION["I6",c(3)])` (I6), `r toString(DESCRIPTION["TDENSITY",c(3)])` (TDENSITY), `r toString(DESCRIPTION["XDENSITY",c(3)])` (XDENSITY), `r toString(DESCRIPTION["AP",c(3)])` (AP), `r toString(DESCRIPTION["COMPS",c(3)])` (COMPS), `r toString(DESCRIPTION["MEAN_DEGREE",c(3)])` (MEAN_DEGREE), and `r toString(DESCRIPTION["NARC",c(3)])` (NARC). They help to evaluate the impact and propagation of delays or disruptions in the project schedule, and the potential opportunities for crashing or fast-tracking activities.
+
+The project network indicators provide a complementary perspective to the logic indicator because the focus is on the network aspects of the project, rather than on the objectives or the outputs. Despite structural indicators already including several network parameters, several important network-level measures are already missing.
+
+### Network indicators {#subsubsec:netindicators}
+
+Table \ref{tab:DESCNETRELIND} lists the proposed network-level indicators when examining project networks. Like the logic indicators, the proposed network indicators help to understand the logic and the structure of the project and how they affect the project duration, risk, and resource allocation. These indicators can be separated into seven clusters. (1) The *density and diameter indicators* measure how many dependencies exist in the project network and how far apart the tasks are in the network. They include Dens and Diam. These measures indicate that the degree of complexity and dispersion of the project network and how they influence the project schedule and resource allocation. (2) *Path length and asymmetry indicators* measure how long and how uneven the paths are in the project network, on the basis of the shortest distances between the tasks. They include AVPL and VAs. These indices indicate the degree of concentration and diversity of the project network and how they affect the project schedule and resources allocation. (3) The *motif and assortativity indicators* measure how many recurring patterns and how similar the tasks are in the project network, on the basis of the number and degree of dependencies. They include the `r toString(DESCRIPTION["Mot",c(3)])` (Mot) and `r toString(DESCRIPTION["ASSORT",c(3)])` (ASSORT). These measures indicate the degree of regularity and the homogeneity of the project network and how they influence the project schedule and resource allocation. (4) *Modularity and community indicators* measure how well the project network can be partitioned into communities, on the basis of different algorithms that optimize the modularity value. These include `r toString(DESCRIPTION["LeM",c(3)])` (LeM), `r toString(DESCRIPTION["IM",c(3)])` (IM), and `r toString(DESCRIPTION["SGM",c(3)])` SGM. These measures of modularity and the community indicate the degree of diversity and cohesion of the project network. Modularity can also help to identify the subprojects or clusters of activities that have strong dependencies within them but weak dependencies with other subprojects or clusters. This can help to improve project management and coordination by assigning different teams or resources to different subprojects or clusters. (5) *Centrality indicators* of how central or important some tasks are in the project network, on the basis of different criteria, such as degree, closeness, eigenvector, PageRank, and betweenness. They also measure how centralized the network is as a whole, on the basis of different indices such as alpha and power. They include `r toString(DESCRIPTION["DZI",c(3)])` (DZI), `r toString(DESCRIPTION["DZO",c(3)])` (DZO), `r toString(DESCRIPTION["DZ",c(3)])` (DZ), `r toString(DESCRIPTION["CZ",c(3)])` (CZ), `r toString(DESCRIPTION["HZ",c(3)])` (HZ), `r toString(DESCRIPTION["EZ",c(3)])` (EZ), `r toString(DESCRIPTION["PRZ",c(3)])` (PRZ), `r toString(DESCRIPTION["AZ",c(3)])` (AZ), `r toString(DESCRIPTION["PZ",c(3)])` (PZ), `r toString(DESCRIPTION["BZ",c(3)])` (BZ), and `r toString(DESCRIPTION["BEZ",c(3)])` (BEZ). These measures indicate the degree of dependency, influence, accessibility, efficiency, importance, impact, intermediation, and hierarchy of the tasks and the network. (6) The *resilience and efficiency indicators* measure how well the project network can maintain its connectivity and efficiency when some tasks or dependencies are removed, either randomly or systematically. These variables include `r toString(DESCRIPTION["RRes",c(3)])` (RRes), `r toString(DESCRIPTION["SRes",c(3)])` (SRes), `r toString(DESCRIPTION["ALE",c(3)])` (ALE), and `r toString(DESCRIPTION["GE",c(3)])` (GE). They indicate the degree of robustness, susceptibility, redundancy, and fragility of the project network. The role of indicators is emphasized more in the case of agile projects where the task completions must be prioritized [@CIRIC2019roleofflexibility]. Because of the limited time and resource availability, several tasks should be postponed to a later which can affect the change in the logic structure of the project [@Kosztyan2015]. (7) Last but not least, the *transitivity indicator* measures how many triangles or closed loops exist in the project network compared to the number of triplets or open paths. It includes Tra. This measure is important because it indicates the degree of cliquishness or openness of the project network.
+
+## Applied supervised and unsupervised machine learning algorithms {#subsec:algorithms}
+
+To answer the research questions, first, descriptive statistics were used to analyze synthetic and real-life project networks (see \nameref{RQ1}). ANOVA revealed significant differences between real and synthetic project plans are identified (see \nameref{RQ3}), and with nongeneric approaches, such as the random forest method, variable importance are also calculated (see Section \ref{subsubsec:supervised}). To answer \nameref{RQ2}, *traditional* methods, such as hierarchical clustering and multidimensional scaling, and *nonparametric* unsupervised learning methods are applied to identify groups of indicators, and the clusters of project networks (see Section \ref{subsubsec:unsupervised}). These methods identify the relationships between indicators and thier classification into indicator groups (see \nameref{RQ2}). To maximize reproducibility by including the source code of the entire article as supplementary material, which was itself written in R, so that the entire calculation can be repeated.
+
+
+### Descriptive statistics on standardized values and the employed supervised learning methods {#subsubsec:supervised}
+
+Prior to employing nongeneric techniques, such as the random forest (RF) method, we utilized descriptive statistics and analysis of variance (ANOVA) methodologies to investigate the project or network indicator that exhibited the greatest disparity between real and synthetic projects. To ensure a fair comparison, we standardized the variables in the descriptive analysis. The unstandardized results are utilized in ANOVA to determine the significance of differences.
+
+In the case of ANOVA, in addition to $R^2$ or adjusted $R^2$, we also calculates $\eta^2$. The $\eta^2$ measures of effect size or variance explained by a factor or a variable in an ANOVA model. It is different from $R^2$ or adjusted $R^2$, which are measures of goodness of fit or how well the model predicts the outcome variable.
+
+The employed supervised learning techniques can demonstrate how the indicators are correlated with each other; therefore, instead of being generic, such as logistic regression or linear discriminant analysis, more robust nongeneric methods, such as the random forest (RF) method, should be used to determine the importance of the variables. We split our database at an 80-20 ratio, where 80% was the training sample and 20% was the test sample. We calculated the accuracy metrics, such as accuracy, balanced accuracy, and F1-score on the test sample.
+
+Since employed supervised learning techniques can show how the indicators are correlated with each other; therefore, instead of being generic, such as logistic regression or linear discriminant analysis, more robust nongeneric methods, such as the random forest (RF) method, should be used to identify the variable importance. Since we obtained almost perfect accuracy both for logistic regression and the random forest method, we did not use any other alternative solution.
+
+### Employed unsupervised learning methods {#subsubsec:unsupervised}
+
+In addition to traditional clustering and dimensionality reduction methods, such as hierarchical clustering and multidimensional scaling techniques for detecting clusters of indicators and project networks, we applied the generalized network-based dimensional reduction method (GNDA) [@kosztyan2023network] instead of methods such as nonnegative matrix factorization (NMF) [@saberi2024nonnegative] due to GNDA's specific advantages in analyzing network structures. GNDA is particularly suited for this research as it can handle both high-dimensional low sample sizes (HDLSS) and low-dimensional high sample sizes (LDHSS), offering greater flexibility and scalability in analyzing diverse project network datasets.
+
+The GNDA method has three mandatory (for dimensional and reduction) and two supplementary steps (for feature selection). Since we applied this method for feature selection, we use only the first three steps. Here, we examined how the supervised clusters are separated from each other.
+
+The GNDA algorithm initially computes the similarity graphs for either the observations or the variables. The similarity function can be either symmetrical, such as with correlation and Euclidean distance, or asymmetric, such as with partial or semipartial correlations. The nodes in this graph can be either observations or variables. Hence, this approach can be employed for clustering either variables or observations. In the second stage, modules are determined on the basis of the similarity graph, where the density of connections between nodes within the modules is greater than that of the nodes in different modules. The community-based detection method is nonparametric, and there is no require that the number of clusters be predefined. During the third stage, the eigenvector centralities are computed for each node. The latent variables for a module are computed as the product of the standardized value of the data and the eigenvector centrality. This process is analogous to principal component analysis However, in this case, eigenvector centralities are defined as weights instead of eigenvalues.
+
+This method has several advantages over traditional unsupervised machines learning techniques.
+
+1. **Scalability**. @kosztyan2022network reported that this method works not only on high-dimensional low sample sizes (HDLSS) but also on low-dimensional high sample sizes (LDHSS).
+2. **Flexibility**. @kosztyan2023network reported that this technique can be used with various types of distance functions.
+3. **Nonparametric**. There is no need to predefine the number of clusters or dimensions.
+
+The method calculates the NDA factor loadings, which are linear combination of the eigenvector centrality of the indicator and the standardized value of the given indicator. A larger factor absolute value of the factor loadings indicates greater embeddedness in the module and represents a greater influence on the latent variable.
+
+Alternative techniques such as graph learning and spectral clustering could potentially be applied to analyze project networks, as they are well suited for capturing complex relationships in graph-structured data [@berahmand2025comprehensive]. However, this study opts for supervised and unsupervised learning methods, including random forest and the GNDA, as they offer greater flexibility in handling both network-level and project-specific indicators, and can effectively address the research questions related to comparing real and synthetic projects across multiple dimensions.
+
+## Computational complexity {#sec:comcomplex}
+
+The computational complexity of the methods employed in this study can be grouped into three categories on the basis of their scalability for large-scale projects:
+
+1. Linear complexity $O(n)$ and quasilinear complexity $O(n\log(n))$: Descriptive statistics, ANOVA, matrix representations and the calculation of most traditional and network-level indicators fall into this category, making them highly scalable for large datasets.
+
+2. Polynomial complexity O(n^k): Hierarchical clustering and multidimensional scaling techniques typically involve polynomial-time complexity, which may limit their scalability for very large projects.
+
+3. Higher complexity: Random forest and generalized network-based dimensional reduction method (GNDA) generally results in higher computational complexity. The random forest has a time complexity of $O(ntree \times nfeature \times nsamples \times \log(nsamples))$, where $ntree$ is the number of trees and $nfeature$ is the number of features, and nsamples is the number of samples. GNDA's complexity depends on the specific implementation but can be computationally intensive for large networks.
+
+For large-scale projects, methods in the first two categories would be more readily applicable, whereas those in the third category might require optimization or sampling techniques to maintain computational feasibility.
+
+
+# Results {#sec:results}
+
+To address these resource questions, we compare the project and the proposed network-level indicators. In Section \ref{subsec:descriptives}, we show the mean of standardized values of the project and network indicators. In Section \ref{subsec:relind}, we show that a significant relationship between the network and project (not only structural) indicators. In Section \ref{subsec:simsynth}, we show that these indicators can be used to classify project networks and can be used to detect real and synthetic projects.
+
+## Descriptive statistics {#subsec:descriptives}
+
+Since the employed indicators can be interpreted at different intervals, Table \ref{tab:MEANS_TIME} shows the standardized mean values of the time-related indicators for synthetic and real projects.
+
+
+```{r MEANS_TIME}
+kable(MEANS_time,digits = 3,format="latex",booktabs=TRUE,longtable=FALSE,caption = "Mean values of standardized time-related project indicators") %>% row_spec(0,bold=TRUE) %>% add_header_above(header=c(" " =1, "Synthetic projects" = 4, " " =1))  %>% kable_styling(latex_options = c("striped","repeat_header","HOLD_position"),full_width = FALSE,font_size = 8) %>% kable_paper()  
+#MEANS_time
+#cbind(DESCRIPTION[DESCRIPTION$ID==rownames(MEANS_time),"Variable name"],MEANS_time)
+```
+
+The standardized values are calculated by subtracting the mean and dividing by the standard deviation of the original values so that they have a mean of zero and a standard deviation of one. This allows for a fair comparison between different indicators and different projects. Table \ref{tab:MEANS_TIME} shows the main differences between the synthetic and real projects that are found in the following indicators: (1) XDUR: The average activity duration is much greater for the real projects than that for the synthetic projects, indicating that the real projects have longer and more complex activities. (2) MAXCPL: The maximum critical path length is also much greater for real projects than that for the synthetic projects, indicating that the real projects have longer and more constrained critical paths. (3) PCTSLACK and PCTFREESLK: The percentage of activities with positive (nonzero) total slack and free slack are much lower for real projects than that for synthetic projects, indicating that real projects have increasingly less flexible noncritical activities. (4) TOTSLACK_R and XSLACK_R: Total slack ratio and the average slack ratio are much greater for real projects than those for synthetic projects, indicating that real projects have more slack per activity and per critical path length than does the synthetic projects. (5) NFREESLK: The number of activities with positive (nonzero) free slack is much lower for real projects than that for the synthetic projects, indicating that real projects have fewer activities that can be delayed without affecting the start of their successors.
+
+Table \ref{tab:MEANS_RESOURCE} shows the standardized mean values of the resource-related indicators for synthetic and real projects.
+
+```{r MEANS_RESOURCE}
+kable(MEANS_resource,digits = 3,format="latex",booktabs=TRUE,longtable=FALSE,caption = "Mean values of standardized resource-related project indicators") %>% row_spec(0,bold=TRUE) %>% add_header_above(header=c(" " =1, "Synthetic projects" = 4, " " =1))  %>% kable_styling(latex_options = c("striped","repeat_header","HOLD_position"),full_width = FALSE,font_size = 8) %>% kable_paper()  
+#MEANS_resource
+#cbind(DESCRIPTION[DESCRIPTION$Type=="Resource",3],MEANS_resource)
+```
+
+The largest differences between synthetic and real projects are found in the following indicators: (1) NRES: The number of renewable resources is much greater for real projects than for synthetic projects, indicating that real projects have more types of resources available for scheduling activities. (2) XDMND: The average resource demand is much greater for real projects than for synthetic projects, indicating that real projects have more resource requirements for each activity. (3) RU: the resource use varies more for synthetic projects than that for real projects, which indicates that the synthetic projects have different degrees of resource diversity among the activities. (4) XUTIL: The average resource utilization is much lower for real projects than that for synthetic projects, indicating that real projects have lower resource efficiency and higher resource bottlenecks on the longest critical path. (5) PCTR: The percentage of activities requiring a positive amount of resource type is much lower for real projects than that for synthetic projects, indicating that real projects have fewer resources distribution and more resource concentration among the activities. (6) RS: The resource strength is more variable for synthetic projects than that for real projects, indicating that synthetic projects have different degrees of resource feasibility and resource gaps for the earliest start schedule of each activity. (7) A_RS: The alpha distribution of resource strength is much lower for real projects than that for the synthetic projects, indicating that the real projects have less variation in resource strengths across different subprojects or disconnected components in the project network. (8) GINI: The Gini coefficient is more variable for synthetic projects than for real projects, indicating that the synthetic projects have different degrees of resource inequality or diversity among activities. (9) RC and XCON: The resource constraint (for each resource type and over time) is much lower for real projects than for synthetic projects, indicating that real projects have less resource tightness or scarcity for each resource type and over time. (10) RF: The resource factor is more variable for synthetic projects than for real projects, indicating that the synthetic projects have different degrees of resource density or complexity in the resource matrix. (11) TOTOFACT and TOTUFACT: Total obstruction factor and total underutilization factors are much greater for real projects than those for the synthetic projects, indicating that the real projects have more excessive and underutilized resource needs for the earliest start schedule.
+
+Table \ref{tab:MEANS_LOGIC} shows the standardized mean values of the structural (logic) and network indicators for synthetic and real projects.
+
+```{r MEANS_LOGIC,results='asis'}
+WO_NET<-kable(MEANS_logic,digits = 3,format="latex",booktabs=TRUE,longtable=FALSE) %>% row_spec(0,bold=TRUE) %>% footnote(general="(a) logic indicators",general_title = "") %>% kable_styling(latex_options = c("striped","repeat_header"),full_width = FALSE,font_size = 8) %>% kable_paper()  
+ONLY_NET<-kable(MEANS_network,digits = 3,format="latex",booktabs=TRUE,longtable=FALSE) %>% row_spec(0,bold=TRUE) %>% row_spec(0,bold=TRUE) %>% footnote(general="(b) network indicators",general_title = "") %>% kable_styling(latex_options = c("striped","repeat_header"),full_width = FALSE,font_size = 8) %>% kable_paper()  
+WO_NET <- gsub("\\begin{table}", "\\begin{minipage}{0.48\\linewidth}", WO_NET, fixed = TRUE)
+WO_NET <- gsub("\\centering", "", WO_NET, fixed = TRUE)
+WO_NET <- gsub("\\end{table}", "\\end{minipage}\\quad", WO_NET, fixed = TRUE) 
+ONLY_NET <- gsub("\\begin{table}", "\\begin{minipage}{0.48\\linewidth}", ONLY_NET, fixed = TRUE)
+ONLY_NET <- gsub("\\centering", "", ONLY_NET, fixed = TRUE)
+ONLY_NET <- gsub("\\end{table}", "\\end{minipage}", ONLY_NET, fixed = TRUE) 
+#kables(list(WO_NET,ONLY_NET),caption = "Distances of project and network indicators",format = "latex")
+cat("","\\begin{table}[H]","\\centering","\\caption{\\label{tab:MEANS_LOGIC}Mean values of standardized structural (logic) and network indicators}",WO_NET,ONLY_NET,"\\end{table}","",sep = "\n") 
+#MEANS_network
+#cbind(DESCRIPTION[DESCRIPTION$Type=="Network",3],MEANS_network
+```
+
+The largest differences between synthetic and real projects are found in the following logic and network indicators: (1) Dens: The density is much greater for real projects than that for synthetic projects, indicating that real projects have more arcs per node and more connections between the activities. (2) I3: The activity distribution is much greater for real projects than that for synthetic projects, indicating that the real projects have more balanced and evenly distributed activities. (3) DZO: The out-degree centralization is much higher for real projects than that for synthetic projects, indicating that the real projects have more variation in the number of successors per activity or more activities with many successors. (4) C and CNC: The network complexity and the coefficient of network complexity are much lower for real projects than those for synthetic projects, indicating that real projects have simpler and less dense project networks. (5) OS: The order strength is much lower for the real projects than that for the synthetic projects, indicating that the real projects have fewer constrained and more flexible project networks. (6) AP and COMPS: The number of articulation points and components are greater for real projects than those for synthetic projects, indicating that real projects have more disconnected and modular project networks. (7) SRes: The resilience to systematic attack is much lower for real projects than for synthetic projects, indicating that real projects are more vulnerable to targeted disruptions of activities. (8) Tra: The graph transitivity is much greater for real projects than for synthetic projects, indicating that real projects have more triangles and more clustering of the activities.
+
+Tables \ref{tab:MEANS_TIME}-\ref{tab:MEANS_LOGIC} show that both project and network indicators greatly differ between synthetic and real project datasets. Figure \ref{fig:MDS}(a) shows that the distance between project and network indicators via multidimensional scaling and Figure \ref{fig:MDS}(b) shows the results of hierarchical clustering of the project networks.
+
+```{r MDS,fig.cap = "Comparison of real and synthetic datasets on the basis of project and network indicators",crop=TRUE,fig.align='center',results='hide',fig.subcap=c("Multidimensional scaling","Dendogram of hierarchical clustering"),fig.width=2.5,fig.height=2.5}
+#out.width="65%"
+par(cex=0.7) 
+Data<-t(MEANS)
+mds.isomds <- isoMDS(dist(Data), tol=1e-3, k=4, maxit = 200)
+hc<-hclust(dist(Data))
+plotdata <- mds.isomds$points
+plotdata <- as.data.frame(plotdata)
+plotdata$names <- rownames(mds.isomds$points)
+plotdata$cut <- cutree(hc, k=2)
+
+ggplot(plotdata, aes(V1, V2, label=names)) + 
+  geom_point(aes(colour=factor(cut)), size=2.3) +
+  geom_text_repel(aes(colour=factor(cut)), size=4) + 
+  scale_colour_discrete(name = "Clusters") +
+  labs(x="", y="", title="") + theme_bw()
+
+plot(hc,xlab = "project networks",main="")
+```
+
+Figure \ref{fig:MDS}(a) shows that for the vertical factor and the completion modes also differ. However, these differences are much less than those differences between real and synthetic projects, which is also confirmed by the results of hierarchical clustering (see Figure \ref{fig:MDS}(b)). The silhouette measure is: `r paste(round(mean(silhouette(plotdata$cut,dist(Data))[,3])*100,2),"%",sep="")`, which indicates a fair classification. Nevertheless, Tables \ref{tab:MEANS_TIME}-\ref{tab:MEANS_LOGIC} show that distances between real and synthetic projects are significant both for project and network indicators. The largest distance of the project indicators occurs if we compare the real project with completion mode 1 synthetic project networks. Since real and synthetic project plans are significantly separated in the indicators, it is possible to classify project plans by using the data. The classification also reveals which indicator (or indicator groups) is the one that separates real and synthetic projects (see Section \ref{subsec:simsynth}).
+
+## Relationship between project and network indicators {#subsec:relind}
+
+```{r CALCULATE_RESULTS}
+#colnames(DATA)[NDA$membership==0]
+NDA<-NDA_data
+Data<-data
+results<-list()
+results[[1]]<-colnames(Data)[NDA$membership==0]
+SET<-setdiff(sort(unique(NDA$membership)),0)
+k<-1
+for (i in SET){
+  results[[k+1]]<-NDA$loadings[names(sort(NDA$loadings[colnames(Data)[NDA$membership==i],k]^2,decreasing = TRUE)),]
+  k<-k+1
+}
+names(results)<-as.character(0:NDA$factors)
+SEP=""
+N=5
+top5<-as.data.frame(matrix(0,nrow=5,ncol=(length(results)-1)*2))
+colnames(top5)=paste(c("VAR","NDA"),rep(1:(length(results)-1),each=2),sep=SEP)
+for (i in 2:length(results)){
+  top5[,paste("VAR",i-1,sep = SEP)]<-rownames(head(results[[i]],n=N))
+  top5[,paste("NDA",i-1,sep = SEP)]<-head(results[[i]][,i-1],n=N)
+}
+```
+
+Figure \ref{fig:NDA_FIG} shows the correlation graph of the project and the network indicators. In the correlation network, the vertices are the indicators, the edges are the correlation relationships between the variables. The thicker an edge is, the closer the connection between them is. The size of the nodes is proportional to the number of correlations. By using the Force Atlas II  [@Jacomy2014ForceAtlas2] algorithm, vertices with many connections are located in the center of the network, whereas vertices with few connections are located on the periphery of the network. The colors depend on which indicator belongs to which module. The connections between modules are given the same color. Indicators marked in black do not belong to any module.
+
+```{r NDA_FIG, fig.cap = "Clustered correlation graph of the project and network indicators",crop=TRUE,fig.align='center'}
+par(mar = c(0.1, 0.1,0.1, 0.1),cex=0.5)   
+NDA$membership<-as.numeric(as.factor(NDA$membership))-1
+plot(NDA,interactive = FALSE,cuts = 0,labeldist = 0.1)
+```
+
+The employed NDA method identifies `r numbers_to_words(NDA$factors)` clusters. This method also calculates the factor loading values of these indicators, which is a linear combination of their eigenvector centralities and the values of latent variables. A higher absolute value of the factor loadings indicates grater embeddedness in the module. Table  \ref{tab:NDA_TOP5} shows the top five indicators which are ranked by the decreasing absolute values of the factor loadings, while the following indicators do not belong to any module: `r toString(as.matrix(results[[1]]),sep = ",")`, which we considered as outliers. 
+
+
+```{r NDA_TOP5}
+kable(top5, 
+                                 format = "latex", 
+                                 booktabs=TRUE,
+                                 caption = "Top 5 indicators and their NDA factor loadings values",
+                                 digits = 3)  %>% row_spec(0,bold=TRUE) %>% 
+kable_styling()
+
+
+```
+
+Table \ref{tab:NDA_TOP5} shows that in three of the four clusters, the structural and network-level indicators are dominant, whereas the fourth cluster mainly collects time-dependent indicators. Table \ref{tab:PDF_MTX} shows the relative frequencies of the indicator groups in clusters, where cluster zero collects the outliers (mainly resource indicators).
+
+```{r PDF_MTX}
+SET<-unique(DESCRIPTION$Type)
+NCOL<-length(results)
+NROW<-length(SET)
+pdf_matrix<-matrix(0,ncol=NCOL,nrow=NROW)
+rownames(pdf_matrix)<-SET
+colnames(pdf_matrix)<-paste("Cluster",0:(length(results)-1),sep = "_")
+for (i in 1:NCOL){
+  if (i==1){
+    A<-as.matrix(results[[i]])
+  }else{
+    A<-as.matrix(rownames(results[[i]]))
+  }
+  for (j in 1:NROW){
+    N<-nrow(DESCRIPTION[DESCRIPTION$Type==SET[j],2])
+    B<-as.matrix(DESCRIPTION[DESCRIPTION$Type==SET[j],2])
+    pdf_matrix[j,i]<-length(intersect(A,B))/N
+  }
+}
+
+pdf_df<-matrix(scales::percent(pdf_matrix,accuracy = 0.01,trim=FALSE,suffix = "%"),ncol = NCOL,nrow = NROW)
+rownames(pdf_df)<-rownames(pdf_matrix)
+colnames(pdf_df)<-colnames(pdf_matrix)
+kable(pdf_df,format = "latex", booktabs=TRUE, align = "r",caption = "Percentage distribution of different project and network indicator types", digits = 2,escape = TRUE)  %>% row_spec(0,bold=TRUE) %>% footnote(general_title = "Cluster_0 contains the outlier indicators") %>% kable_styling(latex_options = c("striped","HOLD_position"))
+```
+
+
+## Similarities and differences between synthetic and real project networks {#subsec:simsynth}
+
+In this section, we employed the analysis of variance approach to determine the variables that exhibit significant differences between the systematic and real datasets (see Section \ref{subsubsec:ANOVA}). Additionally, we utilized the random forest method to compute the importance of each variable (see Section \ref{subsubsec:RF}).
+
+### Analyis of variances {#subsubsec:ANOVA}
+
+Table \ref{tab:ANOVA} shows which indicators are significantly different in the case of synthetic project networks.
+
+```{r ANOVA,fig.width=5}
+Data<-cbind(data1_xy[,1],data1[,DESCRIPTION$ID])
+colnames(Data)[1]<-colnames(data1_xy)[1]
+Data<-Data[, colSums(is.na(Data)) ==0]
+fit<-aov(synthetic~.,as.data.frame(Data))
+
+mod_summary_sign <- summary(fit)[[1]][,5]  # Pull out p-values
+mod_summary_stars <- NA                             # Named vector with significance stars
+mod_summary_stars[mod_summary_sign < 0.1] <- "."
+mod_summary_stars[mod_summary_sign < 0.05] <- "*"
+mod_summary_stars[mod_summary_sign < 0.01] <- "**"
+mod_summary_stars[mod_summary_sign < 0.001] <- "***"
+mod_summary_stars[is.na(mod_summary_stars)] <- ""
+
+Data_only_net<-data1_xy_only_net
+Data_only_net<-Data_only_net[, colSums(is.na(Data_only_net)) ==0]
+fit_only_net<-aov(synthetic~.,as.data.frame(Data_only_net))
+
+Data_wo_net<-data1_xy_wo_net
+Data_wo_net<-Data_wo_net[, colSums(is.na(Data_wo_net)) ==0]
+fit_wo_net<-aov(synthetic~.,as.data.frame(Data_wo_net))
+
+fitmtx<-as.matrix(summary(fit))
+fitdf<-as.data.frame(cbind(fitmtx[[1]],rbind(EtaSq(fit,type = 2),c(NA,NA))))
+rownames(fitdf)<-str_replace(rownames(fitdf),"_"," ")
+colnames(fitdf)[5]<-"Pr($<$F)"
+colnames(fitdf)[6]<-"$\\eta^2$"
+colnames(fitdf)[7]<-"Partial $\\eta^2$"
+#fitdf[is.na(fitdf)]<-""
+FIT_DF<-cbind(fitdf,mod_summary_stars)
+colnames(FIT_DF)[8]<-"Sig."
+Fit_DF<-FIT_DF
+rownames(Fit_DF)<-rownames(Anova(fit))
+kable(cbind(DESCRIPTION[DESCRIPTION$ID %in% str_trim(rownames(Fit_DF)[-55]),c(1)],FIT_DF[-55,c(1:5,8)]),digits = 3,format="latex",booktabs=TRUE,escape=FALSE,longtable=TRUE,caption = "Analysis of variance for detecting the difference in indicators between synthetic and real project networks") %>% row_spec(0,bold=TRUE) %>% row_spec(nrow(fitdf)-1,hline_after = TRUE) %>% kable_styling(latex_options = c("striped","repeat_header","HOLD_position"),full_width = FALSE,font_size = 8) %>% kable_paper()  %>% footnote(general = c(paste(paste('$\\\\sum \\\\eta^2$ =',round(sum(EtaSq(fit,type=1)[,1]),3)),paste("$R^2$ =",round(summary(lm(fit))$r.squared,3)),paste("Adj. $R^2$ =",round(summary(lm(fit))$adj.r.squared,3)),sep=", "),"Sum of squares (Sq) are calcultated by type II mode","Signif. codes:  0 \\'***\\' 0.001 \\'**\\' 0.01 \\'*\\' 0.05 \\'.\\' 0.1 \\' \\' 1"),escape = FALSE)
+#cbind(DESCRIPTION[DESCRIPTION$ID %in% str_trim(rownames(Fit_DF)[-55]),c(1,3)],FIT_DF[-55,c(1:5,8)])
+```
+
+The independent variables are grouped into four types: time, resource, logic, and network. These types represent different aspects of the project network indicators, such as duration, resource allocation, network structure, and network properties. The dependent variable is whether a project network is synthetic or real, which means whether it was generated via a simulation model or derived from a real project.
+
+Table \ref{tab:ANOVA} shows that most of the projects (time, resources, logic), and the network indicators are significant at the $p=0.05$ level. In addition, the variance explained is ($\sum \eta^2$ = `r  round(sum(EtaSq(fit,type=1)[,1]),3)*100`%) acceptable, and the goodness of fit values are ($R^2$ = `r  round(summary(lm(fit))$r.squared,3)*100`%, Adj. $R^2$ = `r  round(summary(lm(fit))$adj.r.squared,3)*100`%) also high. 
+
+
+### Calculating relative importances with random forest methods {#subsubsec:RF}
+
+Table \ref{tab:ANOVA} shows that most project and network indicators are significant. However, the independent variables can have nonlinear connections. Therefore, we used the Boruta [@Borutapkg] method to (a) identify significant variables, and afterward, with a random forest method, (2) we rank the indicators by their variable importance.
+
+
+```{r Boruta_CALC}
+Data<-cbind(data1_xy[,1],data1[,DESCRIPTION$ID])
+colnames(Data)[1]<-colnames(data1_xy)[1]
+Data<-Data[, colSums(is.na(Data)) ==0]
+BOR<-Boruta(synthetic~.,data = as.data.frame(Data))
+#colnames(Data)[(BOR$finalDecision %in% "Confirmed")==FALSE]
+```
+
+After Boruta was calculated only the following indicators: `r toString(str_trim(paste(as.vector(t(DESCRIPTION[DESCRIPTION$ID %in% colnames(Data)[(BOR$finalDecision %in% "Confirmed")==FALSE],c(3)]))," (",as.vector(t(DESCRIPTION[DESCRIPTION$ID %in% colnames(Data)[(BOR$finalDecision %in% "Confirmed")==FALSE],c(2)])),") ",sep="")),sep=",")` are removed from the model. Figure \ref{fig:Boruta} shows the variable importance obtained via a tuned random forest method.
+
+```{r Boruta, fig.cap = "Ranked indicators by variable importance via the tuned random forest method",crop=TRUE,fig.width=5,fig.height=6,fig.align='center'}
+#par(mfrow = c(1, 2))
+DAta<-Data[,(BOR$finalDecision %in% "Confirmed")]
+REal<-DAta[DAta[,1]==0,]
+SYnthetic<-DAta[DAta[,1]==1,]
+set.seed(1)
+REsample <- sample(c(TRUE, FALSE), nrow(REal), replace=TRUE, prob=c(0.8,0.2))
+train_REal <- REal[REsample, ]
+test_REal <- REal[!REsample, ]
+SYsample <- sample(c(TRUE, FALSE), nrow(SYnthetic), replace=TRUE, prob=c(0.8,0.2))
+train_SYnt <- SYnthetic[SYsample, ]
+test_SYnt <- SYnthetic[!SYsample, ]
+train<-rbind(train_REal,train_SYnt)
+test<-rbind(test_REal,test_SYnt)
+rf<-randomForest(as.factor(synthetic)~.,data = DAta)
+importance<-arrange(as.data.frame(rf$importance),MeanDecreaseGini)
+importance$Name <- factor(rownames(importance), levels = unique(rownames(importance))[order(importance$MeanDecreaseGini, decreasing = TRUE)])
+for (i in 1: nrow(importance)){
+  importance[i,"var_categ"]<-DESCRIPTION[DESCRIPTION$ID %in% importance$Name[i],1]
+}
+importance$var_categ<-as.factor(importance$var_categ)
+par(mar = c(0.1, 7.3,0.1, 0.1),cex=0.5)
+barplot(height=importance$MeanDecreaseGini, names=importance$Name, 
+        col=importance$var_categ,
+        horiz=T, las=1,xlab = "Mean Decrease Gini"
+)
+legend("right",legend=c("Logic","Network","Resource","Time"),col=1:4,pch=15)
+```
+
+Table \ref{tab:ACCURACY} shows the most important accuracy measures. 
+
+```{r ACCURACY,echo=FALSE,message=FALSE,warning=FALSE}
+rft<-randomForest(as.factor(synthetic)~.,data = train)
+log<-glm(as.factor(synthetic)~.,data = as.data.frame(train),family = "binomial")
+predict_logit <- predict(log,as.data.frame(test), type = "response")
+predict_logit <- ifelse(predict_logit >0.5, 1, 0) 
+cfl<-confusionMatrix(table(predict_logit,test[,1]),mode = "everything")
+predicted_rft<-predict(rft,newdata=test, type="response")
+cf<-confusionMatrix(table(predicted_rft,test[,1]),mode = "everything")
+ACCURACY<-round(rbind(cbind(t(cfl$overall[c(1,6)]),t(cfl$byClass[c(11,7)])),cbind(t(cf$overall[c(1,6)]),t(cf$byClass[c(11,7)]))),5)
+rownames(ACCURACY)<-c("Logistic Reg.","Random Forest")
+
+kable(ACCURACY,format="latex",booktabs=TRUE,longtable=TRUE,caption = "Accuracy measures of logistic regression and random forest methods") %>% row_spec(0,bold=TRUE) %>% kable_styling(latex_options = c("repeat_header","HOLD_position"),full_width = FALSE,font_size = 8)  
+```
+
+The accuracy of both the logistic regression and the random forest method is high. The first three indicators: `r paste(as.vector(DESCRIPTION[DESCRIPTION$ID %in% importance[order(importance$MeanDecreaseGini,decreasing = TRUE),"Name"][1],c(3)])," (",as.vector(DESCRIPTION[DESCRIPTION$ID %in% importance[order(importance$MeanDecreaseGini,decreasing = TRUE),"Name"][1],c(2)]),")",sep="")`, and `r paste(as.vector(DESCRIPTION[DESCRIPTION$ID %in% importance[order(importance$MeanDecreaseGini,decreasing = TRUE),"Name"][2],c(3)])," (",as.vector(DESCRIPTION[DESCRIPTION$ID %in% importance[order(importance$MeanDecreaseGini,decreasing = TRUE),"Name"][2],c(2)]),")",sep="")` are time-related indicators. However, the third most important indicator for identifying the separation between synthetic and real project networks is a network indicator: `r paste(as.vector(DESCRIPTION[DESCRIPTION$ID %in% importance[order(importance$MeanDecreaseGini,decreasing = TRUE),"Name"][3],c(3)])," (",as.vector(DESCRIPTION[DESCRIPTION$ID %in% importance[order(importance$MeanDecreaseGini,decreasing = TRUE),"Name"][3],c(2)]),")",sep="")`.
+
+## Unsupervised learning methods for identifying project networks
+
+Figure \ref{fig:NDA_SYNPROJ} shows how the indicators are separated into `r numbers_to_words(NDA_syndata$factors)`-`r numbers_to_words(NDA_projdata$factors)` clusters by using the GNDA method. Figure \ref{fig:NDA_SYNPROJ}(a) (Figure \ref{fig:NDA_SYNPROJ}(b)) shows the clustering results for only synthetic (only real) project networks are considered.
+
+```{r NDA_SYNPROJ, fig.cap = "Clustered correlation graph of the project and network indicators on synthetic and real project databases",fig.subcap=c("Synthetic data","Real data"),fig.width=2.6,crop=TRUE,fig.align='center'}
+#par(mfrow = c(1, 2))
+NDA_syndata$membership<-as.numeric(as.factor(NDA_syndata$membership))-1
+par(mar = c(0.3, 0.3,0.3, 0.3),cex=0.5)  
+plot(NDA_syndata,interactive = FALSE,cuts = 0,labeldist = 0.1)
+NDA_projdata$membership<-as.numeric(as.factor(NDA_projdata$membership))-1
+par(mar = c(0.3, 0.3,0.3, 0.3),cex=0.5)  
+plot(NDA_projdata,interactive = FALSE,cuts = 0,labeldist = 0.1)
+```
+
+Figure \ref{fig:NDA_DISTS} shows the clustered project networks if only the proposed network indicators (see Figure \ref{fig:NDA_DISTS}(a)) or the project indicators are employed (see Figure \ref{fig:NDA_DISTS}(b)).
+
+```{r NDA_DISTS, fig.cap = "Clustered Euclidean distance graph of projects for network and project indicators",fig.subcap=c("Only network indicators","Project indicators"),fig.width=2.6,fig.align='center',crop=TRUE}
+par(mar = c(0.1, 0.1,0.1, 0.1),cex=0.2)  
+plot(NDAT_only_net_data1,interactive = FALSE,labeldist = 0,cuts = 0.1)
+par(mar = c(0.1, 0.1,0.1, 0.1),cex=0.2)  
+plot(NDAT_wo_net_data1,interactive = FALSE,labeldist = 0,cuts = 0.1)
+```
+
+Figure \ref{fig:NDA_DISTS} shows that both clustering methods provide `r numbers_to_words(NDAT_only_net_data1$factors)`-`r numbers_to_words(NDAT_wo_net_data1$factors)` clusters. 
+
+```{r TAB_NDAT_ONLY_NET}
+#colnames(DATA)[NDA$membership==0]
+NDA<-NDAT_only_net_data1
+Data<-t(data1_only_net)
+results_only_net<-list()
+SET<-setdiff(sort(unique(NDA$membership)),0)
+for (i in SET){
+  results_only_net[[i]]<-NDA$loadings[names(sort(NDA$loadings[colnames(Data)[NDA$membership==i],i]^2,decreasing = TRUE)),]
+
+}
+names(results_only_net)<-as.character(1:NDA$factors)
+SEP=""
+
+NDA<-NDAT_wo_net_data1
+Data<-t(data1_wo_net)
+results_wo_net<-list()
+SET<-setdiff(sort(unique(NDA$membership)),0)
+for (i in SET){
+  results_wo_net[[i]]<-NDA$loadings[names(sort(NDA$loadings[colnames(Data)[NDA$membership==i],i]^2,decreasing = TRUE)),]
+
+}
+names(results_wo_net)<-as.character(1:NDA$factors)
+#round(100*sum(str_detect(rownames(results[[1]]),"boct"))/length(results[[1]]),2)
+```
+
+Considering only network indicators the first cluster contains `r round(100*sum(str_detect(rownames(results_only_net[[1]]),"boct"))/length(results_only_net[[1]]),2)`% synthetic and `r 100-round(100*sum(str_detect(rownames(results_only_net[[1]]),"boct"))/length(results_only_net[[1]]),2)`% real project networks, whereas the second cluster contains `r round(100*sum(str_detect(rownames(results_only_net[[2]]),"boct"))/length(results_only_net[[2]]),2)`% synthetic and `r 100-round(100*sum(str_detect(rownames(results_only_net[[2]]),"boct"))/length(results_only_net[[2]]),2)`% real project networks. Considering only project indicators, the first cluster contains `r round(100*sum(str_detect(rownames(results_wo_net[[1]]),"boct"))/length(results_wo_net[[1]]),2)`% synthetic and `r 100-round(100*sum(str_detect(rownames(results_wo_net[[1]]),"boct"))/length(results_wo_net[[1]]),2)`% real project networks, whereas the second cluster contains `r round(100*sum(str_detect(rownames(results_wo_net[[2]]),"boct"))/length(results_wo_net[[2]]),2)`% synthetic and `r 100-round(100*sum(str_detect(rownames(results_wo_net[[2]]),"boct"))/length(results_wo_net[[2]]),2)`% real project networks.
+
+
+
+# Discussion {#sec:discussion}
+
+According to the research questions, the network-level indicators are proposed, thus providing new insight into project planning. The existing time-, resource-related, and structural indicators and the proposed network-level indicators of real and synthetic project networks are compared.
+
+The findings indicate that real projects exhibit variations compared with synthetic projects in terms of time-related, resource-related, structural, and network-level characteristics. These variations have consequences for the scheduling and allocation of project tasks and resources as well as for the overall performance, risk, and quality of the project.
+
+The time-related indicators in Table \ref{tab:MEANS_TIME} indicate that real projects are less flexible and efficient than synthetic projects. This is evident from their longer and more variable durations, longer and more constrained critical paths, fewer and less flexible noncritical tasks, and greater slack per activity and per critical path length. The project manager must be cognizant of these problems and strategically plan in response.
+
+The resource-related indicators (Table \ref{tab:MEANS_RESOURCE}) confirm that real projects are also less flexible and efficient than are the synthetic projects in terms of resource planning and allocation, as they have more types and higher demands of resources, lower efficiency and utilization, less resource distribution and diversity, lower resource feasibility and strength, greater resource inequality and concentration, less resource tightness and constrainedness, and more resource excess and underutilization.
+
+The structural and network-level indicators (Table \ref{tab:MEANS_LOGIC}) demonstrate that real projects exhibit higher connectedness and reduced complexity compared with those of synthetic projects in terms of the project network and project schedule. Real projects that exhibit a greater number of arcs per node indicates a greater number of connections between activities, a more evenly distributed allocation of activities, simple and less crowded project networks, increased flexibility and reduced constraints, more fragmented and modular networks, heightened vulnerability to targeted disruptions, a greater presence of triangles and clustering of activities, positive assortativity, lower modularity, higher centrality, lower efficiency, and higher transitivity.
+
+The ANOVA results (Table \ref{tab:ANOVA}) reveal the significant factors in each indicator group, corroborating the descriptive statistics and emphasizing the primary distinctions between the real and synthetic projects. These factors can be utilized to classify projects via supervised and unsupervised learning classification techniques; thus, enhancing the processes of project selection and prioritizing. According to Table \ref{tab:ANOVA}, Figure \ref{fig:Boruta} also shows that network indicators have an important role in describing a project network. The results confirm that the network structure of real projects is significantly different than that of synthetic projects.
+
+The results of the employed GNDA method in unsupervised clustering also confirm that, on the basis of the correlation between indicators, `r numbers_to_words(NDA_syndata$factors)`-`r numbers_to_words(NDA_projdata$factors)` clusters can be specified for both synthetic and real projects. Nevertheless, these clusters do not fully follow the grouping found in the literature. In addition, network indicators can be found in most clusters, which suggests that network indicators affect all types of indicators (see Figure \ref{fig:NDA_SYNPROJ}).
+
+If we reverse the clustering and group project networks, we see that we can obtain `r numbers_to_words(NDAT_only_net_data1$factors)`-`r numbers_to_words(NDAT_wo_net_data1$factors)` each on the basis of the project and the proposed network-level indicators. On the basis of the project indicators, one group is purely synthetic, whereas the other group contains a mixture of real and synthetic projects. However, if only network indicators are considered, We obtain more mixed clusters. Moreover, the supervised learning results as in Figure \ref{fig:Boruta}) show that the indicators together separate the project networks well.
+
+The differences in flexibility and efficiency between real and synthetic projects could be attributed to the idealized nature of synthetic datasets, which may not fully capture the complexities and constraints of real-world project management. Real projects often face unforeseen challenges, resource limitations, and external dependencies that are not typically modeled in synthetic datasets. Agile methodologies could potentially address these differences by promoting adaptability, continuous reassessment, and iterative planning. The proposed unified matrix planning (UMP) model can support this agile approach by allowing flexible project structures and enabling the prioritization of activities [@kosztyan2023matrix]. @kosztyan2023matrix showed that the UMP model's ability to store both fixed and flexible project structures suggests that it could facilitate the dynamic reassessment of task relationships and priorities, which is crucial in agile project management. In addition, @kosztyan2023matrix also noted that by introducing task priorities, the traditional project indicators of the resulting flexible project structures are also closer to the idealized indicators of synthetic projects. However, it is an open question whether this is also true for the network-level indicators now proposed. By providing a framework that can represent and analyze both ideal (synthetic) and real project networks, the UMP model could help practitioners identify areas where real projects deviate from ideal conditions and guide them in implementing more flexible and efficient project management practices.
+
+Traditional project indicators and the proposed network-level indicators offer complementary perspectives on project analysis, with some alignments and contrasts. Traditional indicators focus on time, resources, and structural aspects, whereas network-level indicators provide insights into the project's network properties. Both types of indicators measure complexity, but in different ways. For instance, the traditional 'coefficient of network complexity' (CNC) measures connectedness, whereas network-level indicators such as 'density' and 'average path length' offer more nuanced views of network structure.  Time-related indicators like 'slack' have some correlation with the network centrality measures, as tasks with high centrality often have less slack. Resource-related indicators do not have direct counterparts in network-level indicators, but network measures can indirectly reflect resource distribution.  Structural indicators such as 'order strength' (OS) align somewhat with network modularity measures, both reflecting the project's organizational structure. However, network-level indicators provide additional insights into project robustness, efficiency, and hierarchical structure that is not captured by traditional indicators.  
+
+# Summary and conclusion {#sec:conclusion}
+
+In this study, we introduced and examined network-level indicators for activity-on-node project networks, in addition to the preexisting time-related, resource-related, and structural indicators. The network-level indicators are derived from the principles of network theory and graph analysis. These indicators offer fresh perspectives on the qualities and attributes of the project network, including density, diameter, modularity, centrality, resilience, efficiency, and transitivity. Moreover, such indicators can measure emergent and nonlinear characteristics of the project network, including the level of uniformity, integration, hierarchy, and coherence of the network structure. These aspects are not measured by the logic indicators, which are derived from project management theory and logical analysis. These indicators have the ability to uncover concealed and unforeseen patterns and behaviors within the project network, which can have an impact on project performance, risk, and quality (see Contribution \nameref{C1}).
+
+A comparison between synthetic and real project networks, was conducted by focusing on project and network-level indicators, and we found the primary distinctions and similarities between them. In this study, we identified several distinct characteristics that differentiate real projects from synthetic projects. These include flexibility, efficiency, diversity, complexity, connectedness, modularity, centrality, resilience and efficiency. These variations affect scheduling and the allocating of resources in a project, as well as for project management and evaluation. In this paper, we propose utilizing supervised and unsupervised learning classification methods for classification projects according to their indicator values. This can enhance the processes of project selection and prioritizing (see Contribution \nameref{C3}).
+
+We have made significant contributions to the current body of literature. in multiple ways. We presented a novel approach to project networks analysis, which uses network theory and graph analysis. This approach can enhance and expand the current understanding, which is mostly on the basis of project management theory and logical analysis (\nameref{C1}). Furthermore, we investigated the correlations at the network level. indicators and the current project indicators, uncovering the impact of network features on project aspects and the reciprocal influence they have on each other (\nameref{C2}). This analysis highlights the potential for integrating and aligning these factors to enhance project management. Furthermore, we assessed the soundness and the relevance of the simulation model. We found disparities between real and synthetic project networks, thereby facilitating enhancements to the simulation model and project network analysis (\nameref{C3}).
+
+The study has also yielded practical ramifications for scholars and managers. We showed that network theory and graph analysis are valuable and applicable for project network analysis (\nameref{C1}). A thorough and organized framework has also been presented for evaluating and for comparing project- and network-level indicators (\nameref{C2}). We provided managers with fresh perspectives and resources to comprehend, to oversee, and to enhance the structure and performance of the project network, as well as to handle uncertainties, alterations and interruptions. We also proposed methods for choosing and ranking projects on the basis of their indicator values, which can enhance the efficiency of resource allocation and strategy implementation (\nameref{C3}).
+
+
+# Limitations and future directions {#sec:limitations}
+
+This study has limitations that could be addressed in future work. The study focuses primarily on static project networks, whereas real projects often have dynamic structures that change over time. Developing methods to analyze and compare dynamic project networks could be valuable extension of this work. Additionally, the study does not consider the impact of external factors such as risk and uncertainty on project networks. Incorporating these elements into the analysis could provide more robust insights for project management.
+
+Limitations of the proposed network properties in complex project networks, several areas warrant further investigation. The density measure, for instance, may not adequately captures the nuances of highly interconnected project networks, where the quality of connections might be more important than their quantity. Modularity measures could be refined to better reflect the practical groupings of tasks in real projects, which may not always align with purely structural divisions. Other network-level indicators, such as centrality measures, might need to be adapted to account for the unique characteristics of project networks, such as temporal dependencies and resource constraints. Future research could explore how these network properties can be modified or complemented to provide more meaningful insights in the context of complex project management. Additionally, developing new indicators that specifically address the challenges of large-scale, multimodal projects could significantly enhance our understanding complex project networks.
+
+
+\section*{Declarations}
+
+\subsection*{Ethics approval and consent to participate}
+
+Not applicable.
+
+\subsection*{Consent for publication}
+
+Not applicable.
+
+\subsection*{Availability of data and materials}
+
+Data and functions are freely available and it can be downloaded from the CRAN websites. The applied packages and data are listed in the Section \ref{sec:background}. Both the entire article and all analysis is implemented by R in RStudio. 
+
+
+\subsection*{Competing interests}
+
+The author retains full responsibility for the content of this publication and there are no competing interests.
+
+\subsection*{Funding}
+\label{s:acknowledgements}
+
+This work was performed for the TKP2021-NVA-10 project with support provided by the Ministry of Culture and Innovation of Hungary from the National Research, Development and Innovation Fund, financed under the 2021 Thematic Excellence Programme funding scheme. 
+Zsolt T. Kosztyán's research contribution supported by Project no. K 142395 was implemented with support provided by the Ministry of Culture and Innovation of Hungary from the National Research, Development and Innovation Fund, financed under the K_22 ``OTKA'' funding scheme. 
+
+\subsection*{Authors' contributions}
+
+Not applicable.
+
+\subsection*{Acknowledgments}
+
+We would like to thank the University of Pannonia for supporting Dr. Zsolt T. Kosztyán. We would also like to thank the Hungarian Ministry of Culture and Innovation for funding Dr. Zsolt T. Kosztyán.
+
+\bibliography{bibliography.bib}
+
+\renewcommand\bibliography[1][]{}
+
+\clearpage
+\pagenumbering{arabic}
+\renewcommand{\thepage}{A-\arabic{page}}
+
+::: {.appendices latex=true}
+
+# Formal description of applied indicators {#sec:app_net}
+
+An activity-on-node project network is a set of nodes (i.e.,~tasks) and a set of directed edges (i.e.,~dependencies) that connect some pairs of tasks. In matrix-based project planning, both the logic plan and the time and the resource demands are in a submatrix.
+
+We proposed project indicators, such as time-related, resource-related and structural (logic) and network-level indicators to describe the project plan.
+
+**The applied time-related indicators are described below.**
+
+Table \ref{tab:DESCTIMERELIND} summarizes the applied time-related indicators. A detailed formal description is provided in the Supplementary material.
+
+```{r DESCTIMERELIND}
+kable(DESCRIPTION[DESCRIPTION$Type=="Time",2:5],format="latex",booktabs=TRUE,longtable=TRUE,caption = "Description of time-related indicators") %>% row_spec(0,bold=TRUE) %>% kable_styling(latex_options = c("repeat_header","HOLD_position"),full_width = FALSE,font_size = 8) %>% column_spec(2, width = "2.4cm") %>% column_spec(3, width = "2.7cm") %>% column_spec(4, width = "4.3cm") %>% collapse_rows(columns = 4,  valign = "middle") 
+```
+
+- **Average activity duration** (XDUR): This indicator reflects the average amount of time it takes to complete an activity in a project. It is important to measure the XDUR because it helps to estimate the total duration of the project, even if the given scheduling algorithms initiate activities later. The average task duration is calculated as 
+\begin{equation}
+  \label{eq:XDUR}
+  \text{XDUR}:=\frac{1}{n}\sum_{i=1}^n d_{i}
+\end{equation}
+\noindent
+where $n$ is the number of tasks and $d_i$ is the duration of the $i$-th task.
+
+
+- **Variance in activity duration** (VADUR): This indicator measures the variability or dispersion of the activity durations in a project. It is important to measure VADUR because it helps to assess the uncertainty and the risk of the project schedule, which is necessary to plan for contingencies and buffers. The variance in task duration is calculated as follows:
+\begin{equation} 
+  \label{eq:VADUR} 
+  \text{VADUR}:=\frac{1}{n-1}
+  \sum_{i=1}^{n}\left( d_{i}-\overline{X}\textnormal{DUR}\right) ^{2}
+  \end{equation}
+
+
+- **Maximum critical path length** (MAXCPL): This indicator is expressed as the total project time or the longest sequence of activities from the start node to the end node in an AoN project network. It is important for measuring the MAXCPL because it determines the minimum time required to complete the project, and any delay in an activity on the critical path delays the whole project. We can denote MAXCPL as a *total project time* (TPT) 
+
+- **Number of activities with positive (nonzero) total float** (NSLACK): This indicator counts the total number of activities that have some slack or float in a project. Slack or float is the amount of time an activity can be delayed without affecting the project completion date. It is important to measure NSLACK because it indicates the degree of flexibility or buffer in the project schedule, as well as potential opportunities for resource leveling or smoothing. Formally: 
+\begin{equation}
+  \label{eq:NSLACK}
+  \text{NSLACK}=\sum_{i=1,TS_i>0}^n l_{ii}
+  \end{equation} 
+\noindent
+where $LS_i$ ($ES_i$) is the latest (earliest) start time, and $TS_i:=LS_i-ES_i$ is the total slack of task $i$; $l_{ii}=[\mathbf{LD}]$ is the diagonal value of the logic domain.
+
+
+- **Percent of activities with positive (nonzero) total float** PCTSLACK: This indicator represents the ratio of activities that have some slack or float to the total number of activities in a project. It is important for measuring PCTSLACK because it reflects the proportion of flexibility or buffer in the project schedule and the potential opportunities for resource leveling or smoothing. The percentage of tasks with positive total slack are calculated as follows:
+\begin{equation}
+  \text{PCTSLACK}:=\frac{1}{n} \sum\limits_{i=1}^n\begin{cases} 1 & \text{if $TS_i=LS_i-ES_i > 0$} \\ 
+  0 & \text{if $TS_i=LS_i-ES_i = 0$}\end{cases}
+  \end{equation}
+  
+- **Total Slack Ratio** (TOTSLACK_R): This indicator shows the ratio of the total slack or float of all activities to the critical path length in a project. It is important to measure TOTSLACK_R because it reflects the overall flexibility or buffer in the project schedule and the potential opportunities for resource leveling or smoothing. The total slack ratio is calculated as follows:
+\begin{equation}
+  \label{eq:TOTSLACK_R}
+  \text{TOTSLACK\_R}:=\frac{\sum\limits_{i=1}^n TS_i}{TPT}
+  \end{equation}
+
+- **Average slack** (XSLACK): This indicator shows the average amount of slack or float per activity in a project. It is important to measure XSLACK because it reflects the average flexibility or buffer per activity in the project schedule and the potential opportunities for resource leveling or smoothing. The average total slack per task is calculated as follows: \begin{equation}
+  \label{eq:XSLACK}
+  \text{XSLACK}:=\frac{1}{n} \sum\limits_{i=1}^n TS_i
+  \end{equation}
+
+
+- **Average slack ratio** (XSLACK_R): This indicator shows the average ratio of slack or float per activity to the critical path length in a project. It is important to measure XSLACK_R because it reflects the average flexibility or buffer per activity in relation to project duration and the potential opportunities for resources leveling or smoothing. The average slack ratio is calculated as 
+\begin{equation}
+  \label{eq:XSLACK_R}
+  \text{XSLACK\_R}:=\frac{XSLACK}{TPT}
+  \end{equation}
+
+
+- **Number of activities with positive (nonzero) free slack** (NFREESLK): This indicator counts the total number of activities that have some free slack in a project. Free slack is the amount of time an activity can be delayed without affecting the start of any other activity in the project. It is important to measure NFREESLK because indicates the degree of flexibility or buffer for specific activities in the project schedule and the potential opportunities for resource optimization or reallocation. 
+\begin{equation}
+  \label{eq:NFREESLACK}
+  \text{NSLACK}=\sum_{i=1,FS_i>0}^n l_{ii}
+  \end{equation} 
+\noindent
+where the earliest finishing time of the task $j$ is
+$EF_j=ES_j+d_j$; and \quad $FS_i:=\min\limits_{l_{ij}=1} ES_j-EF_i$ is the free slack of task $i$ (lowest early start of successors - early finish).
+
+
+- **Percent of activities with positive (nonzero) free slack** PCTFREESLK: This indicator reflects the ratio of activities that have some free slack to the total number of activities in a project. It is important for measuring PCTFREESLK because it reflects the proportion of flexibility or buffer for specific activities in the project schedule and the potential opportunities for resource optimization or reallocation. The percentage of activities that have positive (nonzero) free slack can be calculated as follows: 
+\begin{equation}
+  \label{eq:PCTFREESLK}
+  \text{PCTFREESLK}:=\frac{1}{n} \sum\limits_{i=1}^n\begin{cases} 1 & \text{if $FS_i > 0$} \\ 0 & \text{if $FS_i = 0$}\end{cases}
+  \end{equation}
+
+
+- **Average free slack** (XFREESLK): This indicator shows the average amount of free slack per activity in a project. It is important to measure the XFREESLK because it reflects the average flexibility or buffer for specific activities in the project schedule and the potential opportunities for resource optimization or reallocation. 
+\begin{equation}
+  \label{eq:XFREESLK}
+  \text{XFREESLK}:=\frac{1}{n} \sum\limits_{i=1}^n FS_i
+  \end{equation}
+
+
+**Formal definitions of the employed resource indicators:**
+
+Table \ref{tab:DESCRESRELIND} summarizes the applied resource-related indicators. A detailed formal description is provided in the Supplementary material.
+
+```{r DESCRESRELIND}
+kable(DESCRIPTION[DESCRIPTION$Type=="Resource",2:5],format="latex",booktabs=TRUE,longtable=TRUE,caption = "Description of resource-related indicators") %>% row_spec(0,bold=TRUE) %>% kable_styling(latex_options = c("striped","repeat_header"),full_width = FALSE,font_size = 8) %>% column_spec(2, width = "2.2cm") %>% column_spec(3, width = "4.1cm") %>% column_spec(4, width = "3.5cm") %>% collapse_rows(columns = 4,  valign = "middle") 
+```
+
+
+We write $\mathcal{S}$ as a realized project structure and $\mathbf{LD} \in \{0,1\}^{n\times n}, \mathbf{T} \in \mathbb{R}_+^n \text{ and } \mathbf{RD} \in \mathbb{R}_+^{n \times \rho}$ as a domain of the matrix representation of $\mathcal{S}$, where $n$ is the number of tasks and $|\mathcal{A}| =\sum_{ij, i\neq j} l_{ij}$ ($l_{ij}=[\mathbf{LD}]_{ij}$). We write $t_i = [\mathbf{TD}]_{ii}$ as the duration of task $i$ and TPT as the duration of the project, and $r_{ij}=[\mathbf{RD}]_{ij}$ as the resource demand of task $i$ of resource $j$.
+
+
+$\overrightarrow{\mathcal{S}}$ is a project schedule of project structure \(\mathcal{S}\) if for each realized task $a_i\in \mathcal{S}$ the interval $T_i \subseteq [0,\text{TPT}]$ is determined when $a_i$ is addressed (scheduled). To ensure compatibility with other papers, the redundant notation $a_i(T)\in \overrightarrow{\mathcal{S}}$ is used.
+
+We write $S(a_i(T))\in [0,TPT-t_i]$ as the start and $F(a_i(T)) \in [t_i,TPT]$ the completion time of task $i$. The early schedule, denoted $\overrightarrow{\mathcal{S}}_{\min}$, satisfies $\forall a_i(T)\in \overrightarrow{\mathcal{S}}_{\min}$ $S(a_i(T))=\text{ES}_i$ and $F(a_i(T))=\text{EF}_i$. We write the *resource demand* $j$ of task $i$ at time $\tau$ as follows:
+
+\begin{equation}
+\label{eq:r_ij}
+r_{ij}(\tau):=\begin{cases}r_{ij}\text{ if } a_i(T)\in \overrightarrow{\mathcal{S}}, \tau \in T_i \\
+0\text{ otherwise}\end{cases}   
+\end{equation}
+
+Furthermore, we denote the total (renewable) resource *demand* as $j$ at time $\tau$ as $r_j(\tau)=\sum_ir_{ij}(\tau), \text{ where } \tau \in [0,\text{TPT}]$.
+
+- **The resource Factor** (RF), is the density of **RD**, the resource matrix from a domain mapping matrix (DMM). The RF gives the rate of how often resources are needed from all possible resource type-activity pairings. Higher RF values indicate a more complex scheduling problem.
+\begin{equation}
+    \label{eq:RF}
+    \textnormal{RF}
+    :=\frac{1}{n\rho}\sum_{i=1}^{n}\sum_{j=1}^{\rho}\begin{cases} 1 & \textnormal{if } r_{ij}>0 \\ 0 & \textnormal{otherwise}  \end{cases} \quad 
+    =\frac{1}{\rho}\sum_{j=1}^{\rho}{\textnormal{PCTR}_{j}}
+    \end{equation} 
+\noindent
+where $r_{ik}$ denotes the amount of resource type $j$ needed by task $i$ and $\textnormal{PCTR}_j$ denotes the percentage of activities that require the given resource type, which is a columnwise view of the RF as follows: 
+\begin{equation}
+    \label{eq:PCTR}
+    \textnormal{PCTR}_{j}:=\frac{1}{n} \sum_{i:=1}^n \begin{cases} 1 & \textnormal{if } r_{ij}>0 \\0 & \textnormal{otherwise}  \end{cases}
+\end{equation}
+
+- **Resource Use** (RU), represents the resource use for each activity, i.e., the number of resource types used. The RU varies between 0 and
+\textit{r} (the number of resource types). It is a rowwise view of RF
+(\(i=1,...,n\)) as follows: \begin{equation}
+     \label{eq:RU}
+     \textnormal{RU}_i := \sum_{j=1}^{\rho}  \left\{\begin{matrix} 1  &\textnormal{if } r_{ij}>0  \\  0 & \textnormal{otherwise} \end{matrix}\right.
+ \end{equation}
+
+- $\textnormal{DMND}_j$ is **the average quantity of resources** $j$ demanded when needed by an activity ($j=1,...,\rho$) as follows:
+\begin{equation}
+\label{eq:DMND}
+    \textnormal{DMND}_j:=\frac{\sum_{i=1}^n r_{ij}}{\sum_{i=1}^n \begin{cases} 1 & \text{if } r_{ij}>0 \\ 0 & \text{if } r_{ij}=0 \end{cases}}
+\end{equation}
+
+- RC is **the resource constrainedness** of each resource type and is calculated as follows: \begin{equation}
+\label{eq:RC}
+    \textnormal{RC}_{j}:=\frac{\textnormal{DMND}_{j}}{\alpha_{j}}
+\end{equation}
+\noindent
+where $\alpha_{j}$ is the *availability* of
+renewable resource type $j$.
+
+The following indicators of @patterson1976project require early scheduling ($\overrightarrow{\mathcal{S}}_{\min}$) of the activities regarding the precedence relations but not the resource constraints.
+
+- RS is the **resource strength** of each renewable resource type and is calculated as follows: 
+\begin{equation}
+\label{eq:RS}
+    \textnormal{RS}_{j}:=\frac{\alpha_{j}-r_{j}^{\min}}{r_{j}^{\max}-r_{j}^{\min}}
+\end{equation}
+\noindent 
+where $\alpha_{j}$ denotes the total availability of renewable resource type $j$, $r_{j}^{\min}:= \max_{i=1,...,n} (r_{ij})$ is the highest *individual* resource demand and $r_{j}^{\max}$ denotes the peak total demand at any moment for resource type $j$ in the precedence, preserving the earliest start schedule. The
+$RS_i^{(\alpha)}$ can be calculated as follows:
+
+\begin{equation}
+\label{eq:RS_A}
+RS_i^{(\alpha)} = \begin{cases}
+\frac{RS_i^\alpha - 1}{\alpha}, & \alpha \neq 0 \\
+\log(RS_i), & \alpha = 0
+\end{cases}
+\end{equation} the $\alpha$-distance between the RS distributions of different subprojects or disconnected components of the project network, which is a measure of how different two distributions are on the basis of the alpha power transformation. The $\alpha$-distance can be calculated as:
+\begin{equation}
+\label{eq_D_RS}
+D_{\alpha}(RS_A, RS_B) = \sqrt{\frac{1}{n} \sum_{i=1}^n (RS_{A,i}^{(\alpha)} - RS_{B,i}^{(\alpha)})^2}
+\end{equation} 
+\noindent
+where $RS_A$ and $RS_B$ are the vectors of RS
+indicators for subprojects A and B, respectively, and $n$ is the number of activities in each subproject. A_RS indicator, which is the average $\alpha$-distance between the RS distributions of all possible pairs of subprojects or disconnected components in the project network. The A_RS indicator can be calculated as:
+\begin{equation}
+\text{A\_RS} = \frac{2}{m(m-1)} \sum_{A < B} D_{\alpha}(RS_A, RS_B)
+\end{equation}
+\noindent
+where $m$ is the number of subprojects or disconnected components in the project network, and the summation is over all possible pairs of subprojects or components.
+
+- $\textnormal{UTIL}_j$ is the **utilization** (rate) of resources, and it is measured on the basis of the critical path length. Higher values indicate more constraints, less room for scheduling, and less possibility of changing the task starting times without increasing the TPT.
+\begin{equation}
+  \label{eq:UTIL}
+    \textnormal{UTIL}_{j}:=\frac{\sum_{i=1}^n r_{ij}t_{i}}{\alpha_{j} \cdot \textnormal{TPT}}
+\end{equation}
+
+- The applied XUTIL is the **average resource utilization**.
+
+- $\textnormal{TCON}_j$ is the **constraint on the (renewable) resource type** $j$ over time. In practice, this is the average utilization ($\textnormal{UTIL}_j$) considering only those tasks that use that particular resource type as follows:
+\begin{equation}
+    \textnormal{TCON}_j:=\frac{\sum_{i=1}^n r_{ij}t_{i}}{\alpha_{j} \cdot \textnormal{TPT} \cdot \sum_{i=1}^n \begin{cases} 1 & \textnormal{if } r_{ij}>0 \\0 & \textnormal{otherwise}  \end{cases}}
+\end{equation}
+
+- $\textnormal{OFACT}_j$ is the **obstruction factor of (renewable) resource type** $j$ and is calculated as follows:
+\begin{equation}
+    \label{eq:OFACT}
+     \textnormal{OFACT}_j:=\frac{\int_{0}^\textnormal{TPT}  \max \{0;r_j(\tau)-\alpha_j \} d\tau}{\sum_{i=1}^n r_{ij}t_{i}}
+ \end{equation}
+
+- **Total obstruction factor** (TOTOFACT=\(\sum_jOFACT_j\) is the sum of UFACT for resources.
+
+- $\textnormal{UFACT}_j$ is the **underutilization factor** and is calculated as follows:
+\begin{equation}
+     \textnormal{UFACT}_j:=\frac{\int_{0}^\textnormal{TPT}  \max \{0;\alpha_j - r_j (\tau)\} d\tau}{\sum_{i=1}^n r_{ij}t_{i}}
+\end{equation}
+
+- The **total underutilization factor** (TOTUFACT=\(\sum_jOFACT_j\))): sum of UFACT for resources.
+
+- The **average resource loading factor** (ARLF), suggested by @kurtulus1982multi, represents the resource distribution of projects. If resource requirements are in the first half of the project, it has a negative value, whereas a positive value means that the resource demands are in the latter half of the project; these values are on the basis of the critical path duration of each project. For multiple (sub)projects, the possible issue of averaging individual ARLF values are managed by NARLF, where normalization is performed with the critical path duration of all (sub)projects [@browning2010resource]. The formula is further improved by [@van2020resource] with NARLF, which, on top of this, determines if a resource demand falls at the beginning or the end on the basis of the critical path of the portfolio instead of the critical path for each project. It uses two auxiliary variables:
+\begin{equation}
+\label{eq:ARLF}
+Y_{i(\tau)}=
+\begin{cases}
+1 & \text{if activity } a_{i} \text{ is active at time } \tau,\\
+0 & \text{otherwise}
+\end{cases}
+\end{equation}
+
+\begin{equation}
+\label{eq:NARLF1}
+Z_{i(\tau)}=
+\begin{cases}
+-1 & \text{if } \tau \leq \lceil TPT/2 \rceil,\\
+1 & \text{if } \tau > \lceil TPT/2 \rceil,
+\end{cases}
+\end{equation}
+
+to obtain:
+
+\begin{equation}
+\label{eq:NARLF}
+\begin{split}
+\text{NARLF} = \frac{1}{TPT} \sum_{\tau}^{TPT} \sum_{i=1}^{n} \sum_{j=1}^{\rho} Z_{i(\tau)} Y_{i(\tau)} \left( \frac{r_{ij}}{|\{r_{ij}:r_{ij}>0\}|}\right)
+\end{split}
+\end{equation}
+\noindent 
+where $\tau$ is the time for the earliest start schedule considering release dates.
+
+- The **Gini coefficient** is a measure of inequality that compares the actual distribution of a variable, such as income, wealth, or work content, with a hypothetical equal distribution. The Gini coefficient formula is:
+\begin{equation}
+\text{GINI} = \frac{\sum_{i=1}^n \sum_{j=1}^n |x_i - x_j|}{2n^2 \bar{x}}
+\end{equation}
+\noindent
+where $n$ is the number of observations, $x_i$ is the value of the variable for the $i$-th observation, and $\bar{x}$ is the mean value of the variable.
+
+To apply this formula to the work content of activities, we define the variable $x_i$ as the product of the renewable resource and the duration of the $i$-th activity.
+
+The Gini coefficient ranges from 0 to 1, where 0 means perfect equality (all activities have the same work content) and 1 means perfect inequality (one activity has all the work content). A higher Gini coefficient indicates a more uneven distribution of work content among the activities.
+
+\noindent
+**Formal definitions of the employed logic indicators:**
+
+Table \ref{tab:DESCLOGRELIND} summarizes the applied resource-related indicators. A detailed formal description is provided in the Supplementary material.
+
+```{r DESCLOGRELIND}
+kable(DESCRIPTION[DESCRIPTION$Type=="Logic",2:5],format="latex",booktabs=TRUE,longtable=TRUE,caption = "Description of logic indicators") %>% row_spec(0,bold=TRUE) %>% kable_styling(latex_options = c("striped","repeat_header"),full_width = FALSE,font_size = 8) %>% column_spec(2, width = "2.2cm") %>% column_spec(3, width = "3.6cm") %>% column_spec(4, width = "3.6cm") %>% collapse_rows(columns = 4,  valign = "middle") 
+```
+
+We denote $\mathcal{S}$ as a realized project structure, $\mathbf{LD} \in \{0,1\}^{n\times n}$ of $\mathcal{S}$; $|\mathcal{A}| = \sum_{i \neq j} l_{ij}$ ($l_{ij}=[\mathbf{LD}]_{ij}$) is the total number of dependencies (arcs) between tasks.
+
+- TASKS=$I_1$, the **number of tasks** (nodes), is calculated as follows:
+\begin{equation}
+\label{eq:I1}
+    I_1:=n
+\end{equation}
+
+- $I_2$, the serial-parallel structure, measures the closeness to serial or parallel completion. For $I_2$, the following notation is used: $S_i$ ($P_i$) denotes the *set* of immediate successors (predecessors) of task $i$. For topologically ordered, acyclic project networks, $|S_i|=\sum\limits_{j=i+1}^n l_{ij}$, $|P_i|=\sum\limits_{j=1}^{i-1} l_{ji}$. The progressive ($PL_i$) and the regressive ($RL_i$) level *numbers* of each task $i$ can be calculated as follows:
+\begin{equation}
+   \label{eq:PLi}
+   PL_i := \begin{cases} 
+1 & \text{if $P_i = \emptyset $} \\
+\max\limits_{j \in P_i} PL_j + 1 
+& \text{if $P_i \neq \emptyset $} 
+\end{cases} 
+\end{equation}
+
+\noindent 
+and
+
+\begin{equation}
+\label{eq:RLi}
+RL_i := \begin{cases} m & \text{ if }S_i = \emptyset \\
+\min\limits_{j \in S_i} RL_j - 1 & \text{ if } S_i \neq 
+\emptyset 
+\end{cases}
+\end{equation}
+\noindent 
+where $m=\max\limits_{i} PL_i$. Next, we have the following:
+\begin{equation}
+\label{eq:I2}
+    I_2:=\begin{cases} 1 & \text{if $n = 1$} \\ \frac{m-1}{n-1} & \text{if $n > 1$}\end{cases}
+\end{equation}
+
+- $I_3$, the task distribution, measures the distribution of tasks over the progressive levels by calculating the total absolute deviations.
+
+First, we define the $j$-th progressive *level* of $j=1,...,m$ as follows: $\mathbf{PL}_{j}:=\left\{i\leq n:PL_{i}=j\right\}$, i.e., the *set* of all tasks having progressive level number $j$. Then,
+\begin{equation}
+\label{eq:I3}
+    I_3:=\begin{cases} 0 & \text{if $m=1$ or $m =n$} \\ \frac{\alpha_w}{\alpha_{\max}}= \frac{
+\sum\limits_{j=1}^m |w_{j} - \overline{w}| }{2(m-1)(\overline{w}-1)} & \text{if $1<m<n$}\end{cases}
+\end{equation}
+\noindent 
+where $w_{j}=|\mathbf{PL}_{j}|$ is the width (size) of progressive level $j=1,...,m$, $w=(w_1,w_2,...,w_m$ is the vector which contains the widths of each progressive level, and $\overline{w}=n/m$, $\alpha_{w}$ is the total absolute deviation from the average width. Then, $\alpha_{\max}$ is the maximal value of $\alpha_{w}$ of a network (ranging for all possible $\mathcal{A}$); thus, \footnote{The maximal value of $\alpha _{w}$ is achieved ($n$ and $m$ are fixed, $\sum_{j=1}^{m}w_{j}=n$) when all levels are singletons, except for one with $n-\left( m-1\right)$ tasks; repetitive use of the inequality $\left\vert a-\overline{w}\right\vert +\left\vert b-\overline{w}\right\vert <\left\vert a-1-\overline{w}\right\vert +\left\vert b+1-\overline{w}\right\vert$ for $1<a\leq \overline{w}\leq b<n$ produces this extrema. 
+} \quad $\alpha_{\max}=(m-1)(\overline{w}-1)+(n-m+1-\overline{w})$ 
+\quad this formula simplifies to $\alpha_{\max}$
+$=2(m-1)(\overline{w}-1)$. \medskip
+
+- $I_4$, the ratio of \textit{short} arcs. The length of an ``arc'' (called a path in graph theory) between tasks $i_1$ and $i_2$ is defined as % \quad $L ( i_1 , i_2 ) := | PL_{i_1} - PL_{i_2} | $, % \quad i.e., the difference between their progressive level numbers. Arcs of length $1$ are called \textit{short}, and % \quad $D:=\sum\limits_{j=1}^{m-1}{w_j}\cdot{w_{j+1}}$  is the \textit{maximal} number of short arcs. $n'_L$ denotes the number of arcs of length $L$ for $1\leq L \leq m-1$. Then, $I_4$ is calculated as follows:
+\begin{equation}
+\label{eq:I4}
+    I_4:=\begin{cases} 1 & \text{if $D = n - w_1$} \\ \frac{n'_1-n+w_1}{D-n+w_1} & \text{if $D > n - w_1$}\end{cases}
+\end{equation}
+
+- $I_5$, the ratio of *long* arcs ($L>1$), is calculated as follows:
+\begin{equation}
+\label{eq:I5}
+    I_5:=\begin{cases} 1 & \text{if $| \mathcal{A} | = n - w_1$} \\ \frac{\left(\sum\limits_{L=2}^{m-1}n'_L\frac{m-L-1}{m-2}\right)+n'_1-n+w_1}{| \mathcal{A} |-n+w_1} & \text{if $| \mathcal{A} |  > n - w_1$}\end{cases}
+\end{equation}
+
+- $I_6$, the topological float, considers the differences between the regressive and the progressive level numbers of task $i$, i.e., $|RL_i -PL_i|$, as follows:
+\begin{equation}
+\label{eq:I6}
+    I_6:=\begin{cases} 0 & \text{if $m \in{\{1,n\}}$} \\ \frac{\sum\limits_{i=1}^{n} | RL_i-PL_i |} {(m-1)(n-m)}& \text{if $m \notin{\{1,n\}}$}\end{cases}
+\end{equation}
+
+- CNC, the **coefficient of network complexity**, is calculated as follows:
+\begin{equation}
+\label{eq:cnc}
+\text{CNC}=\frac{|\mathcal{A}|}{n}
+\end{equation}
+
+- OS, the **order strength**, is calculated as follows: 
+\begin{equation}
+\label{eq:OS}
+\text{OS}=\frac{|\mathcal{A}|}{n(n-1)/2}
+\end{equation}
+
+- C, the **network complexity**, is calculated as follows: 
+\begin{equation}
+\label{eq:C}
+\text{C}=\begin{cases} \frac{\log\frac{|\mathcal{A}|}{n-1}}{\log\frac{n^2-1}{4(n-1)}} & \text{if $n$ is odd} \\   \frac{\log\frac{|\mathcal{A}|}{n-1}}{\log\frac{n^2}{4(n-1)}} & \text{if $n$ is even}\end{cases}
+\end{equation}
+
+- TDENSITY, the **total activity density**, is calculated as follows:
+\begin{equation}
+\label{eq:TDENSITY}
+\text{TDENSITY}:=
+%\sum_{i:=1}^n\max\left\{0, \sum_{j:=1}^nl_{ji}-\sum_{j:=1}^nl_{ij}\right\}, i\neq j
+\sum_{i:=1}^n\max \left\{0, |P_i|-|S_i| \right\}
+\end{equation}
+
+\noindent 
+$S_i$ and $P_i$ were defined immediately before $I_2$.
+
+- XDENSITY, the **average activity density**, is calculated as follows:
+\begin{equation}
+\text{XDENSITY}:=\frac{\text{TDENSITY}}{n}\label{eq:XDENSITY} 
+\end{equation}
+
+**Formal definitions of the employed network-level indicators:**
+
+Table \ref{tab:DESCNETRELIND} summarizes the applied resource-related indicators. A detailed formal description is provided in the Supplementary materials.
+
+```{r DESCNETRELIND}
+kable(DESCRIPTION[DESCRIPTION$Type=="Network",2:5],format="latex",booktabs=TRUE,longtable=TRUE,caption = "Description of logic indicators") %>% row_spec(0,bold=TRUE) %>% kable_styling(latex_options = c("striped","repeat_header"),full_width = FALSE,font_size = 8) %>% column_spec(2, width = "2.2cm") %>% column_spec(3, width = "3.8cm") %>% column_spec(4, width = "4.2cm")  
+```
+
+
+- **Density** (Dens): This measures how many dependencies exist in the project network, relative to the maximum possible number of dependencies. A high density means that the project network is more connected, whereas a low density means that the network is sparser. This indicator reflects the degree of complexity of the project network. The density of a network with $n$ tasks and $m$ dependencies are given by a directed network. 
+\begin{equation}
+  Dens = \frac {m} {n(n-1)} \label{eq:Dens}
+  \end{equation}
+
+
+- **Diameter** (Diam): This measures the longest shortest distance between any pair of tasks in the project network (without considering task durations). A high diameter means that the network is more   dispersed, whereas a low diameter means that the network is more compact. *This indicator reflects the degree of dispersion or concentration of the project network.* The diameter of a network is given by 
+\begin{equation}
+  Diam = \max_{u,v \in V} d(u,v) \label{eq:Diam}
+  \end{equation} 
+\noindent
+where $V$ is the set of tasks and $d(u,v)$ is the shortest path distance between tasks $u$ and $v$
+
+- **Average path length** (AVPL): This measures the average shortest distance between any pair of tasks in the project network (without considering task durations). A high average path length means that the network is more dispersed, while a low average path length means that the network is more compact. *This indicator also reflects the degree of dispersion or concentration of the project network*. The average path length of a network is given by
+\begin{equation}
+  AVPL = \frac {1} {n(n-1)} \sum_{u,v \in V} d(u,v) \label{eq:AVPL}
+  \end{equation} 
+\noindent
+
+
+- **Vertex asymmetries** (VAs): A task with a high vertex asymmetry may be a bottleneck, a source of risk in the network, or a task that needs more coordination or communication. The average value of the vertex asymmetries measure how asymmetric the network is in terms of the distribution of dependencies among the tasks. A high vertex asymmetry means that the network is more skewed, whereas a low vertex asymmetry means that the network is more balanced. *This indicator reflects the degree of inequality or diversity in the network structure.* The vertex asymmetry of a network is given by
+\begin{equation}
+  VAs = \frac {1} {n(n-1)} \sum_{u,v \in V} |k_u - k_v|
+  \end{equation} 
+\noindent
+where $V$ is the set of tasks and $k_u$ and $k_v$
+are the degrees of tasks $u$ and $v$, respectively.
+
+- **Number of motifs** (Mot): This metric measures the number of recurring patterns of dependencies in the project network. A high number of motifs means that the project network has a rich structure, while a low number of motifs means that the project network has a simple structure. *This indicator reflects the degree of regularity or randomness of the network.* The number of motifs in a network is given by 
+\begin{equation}
+  M = \sum_{s \in S} f_s \label{eq:Mot}
+  \end{equation}
+\noindent  
+where $S$ is the set of all possible subgraphs and $f_s$ is the frequency of subgraph $s$ in the network.
+
+
+- **Assortativity** (Assort): This measures how similar the tasks are in terms of their degree, which is the number of dependencies they have. A positive assortativity means that tasks tend to depend on or influence other tasks that have similar degrees, while a negative assortativity means that tasks tend to depend on or influence other tasks that have different degrees. *This indicator represents the degree of homogeneity or heterogeneity in the project network structure.* The assortativity of a network is given by
+\begin{equation}
+  r = \frac {\sum {i,j} A{ij}(k_i - \bar{k})(k_j - \bar{k})} {\sum {i,j} A{ij}(k_i - \bar{k})^2}\label{eq:Assort}
+  \end{equation} 
+\noindent
+where $A_{ij}$ is the adjacency matrix, $k_i$ and $k_j$ are the degrees of tasks $i$ and $j$, and $\bar{k}$ is the average degree of the network.
+
+
+- **Leiden's** (LeM) / **Infomap's** (IM) / **Spin-Glass graph modularity value** (SGM): This measures how well the network can be partitioned into communities on the basis of the Leiden's / Infomap / Spin-Glass algorithm. A high graph modularity value means that the network has a clear community structure, whereas a low Infomap's graph modularity value means that the network is more homogeneous or random. *This indicator reflects the degree of diversity or cohesion in the network.* The similarity between these methods is that they all try to find the best partition of the network into communities that maximizes some objective function, which is related to the modularity of the network. The difference is that they use different algorithms, models, and parameters to achieve this goal, which can result in different community structures and modularity values. The modularity value of a network is given by 
+\begin{equation}
+  Q = \frac {1} {2m} \sum {i,j} \left ( l{ij} - \gamma \frac {k_i k_j} {2m} \right ) \delta (c_i, c_j)\label{eq:mod}
+  \end{equation}
+\noindent
+where $l_{ij}$ (edge) is an element of the logic domain $\mathbf{LD}$ (adjacency matrix) and $m$ is the number of dependencies, $k_i$ and $k_j$ are the degrees of task $i$ and $j$, $\gamma$ is the resolution parameter, $c_i$ and $c_j$ are the communities of tasks $i$ and $j$, and $\delta$ is the Kronecker delta function. The Leiden algorithm is an improving the Louvain algorithm, which is a greedy optimization maethod that maximizes the modularity of the network. The modularity is a measure of the extent to which the network can be divided into densely connected groups of tasks with few dependencies between them. The Leiden algorithm improves upon the Louvain algorithm by refining the community [@Leiden2019], by using local moves to optimize the modularity, and by using a smart initialization that prevents empty communities. The Infomap algorithm of @rosvall2008maps is on the basis of the idea of using community partitions of the network as a Huffman code that compresses the information about a random walker exploring the network. The random walker moves along   the dependencies of the network with probabilities given by a Markov transition matrix. The Infomap algorithm tries to find the optimal partition that minimizes the expected description length of the random walker's trajectory, which is equivalent to maximizing the map equation, a measure of the information flow in the network. The Spin-Glass algorithm of @reichardt2006networks is on the basis of the analogy of a Spin-Glass system in physics, where each task is a spin that can take a finite number of states and each dependency is a coupling that determines the energy of the system. The Spin-Glass algorithm tries to find the optimal partition that minimizes the Hamiltonian, a measure of the energy of the system, which is equivalent to maximizing the Spin-Glass modularity, a measure of the difference between the actual and the expected number of dependencies within and between communities.
+
+- **Degree** (DZ) / **in-degree** (DZI) / **out-degree** (DZO) **centralizations**: This measures how concentrated the total / incoming / outgoing dependencies are on a few nodes. A high degree / in-degree / out-degree centralization means that there are some nodes that send / receive with many dependencies, while a low in-degree centralization means that the dependencies are more even distributed  among the activities. In other words, high degree centralizations indicate that some activities are highly dependent or influential on others. *This indicator can reflect the degree of dependency or the influence that some activities have over others.* The degree / in-degree /out-degree centralization of a network is given by
+\begin{eqnarray}
+  DZ = \frac {\sum_{i \in V} (\max_{j \in V} k_j - k_i)} {(n-1)(n-2)} \label{eq:DZ} \\
+  DZI = \frac {\sum_{i \in V} (\max_{j \in V} k_j^{in} - k_i^{in})} {(n-1)(n-2)} \label{DZI} \\
+  DZO = \frac {\sum_{i \in V} (\max_{j \in V} k_j^{out} - k_i^{out})} {(n-1)(n-2)} \label{DZO}
+  \end{eqnarray} 
+\noindent
+where $V$ is the set of tasks, $n$ is the number of tasks, and $k_i$/$k_i^{in}$ / $k_i^{out}$ and $k_j$ / $k_j^{in}$ / $k_j^{out}$ are the degrees / in-degrees / out-degrees of tasks $i$ and $j$, respectively.
+
+- **Closeness centralization** (CZ) / **Harmonic centralization** (HZ): This measures how close a task is to all other tasks in the project network; this measure is on the basis of the sum of the shortest distances/the harmonic mean of the distances between them (without considering task durations). A high closeness/harmonic centralization means that there are some tasks that are close to all other tasks, while a low closeness/harmonic centralization means that the tasks are more distant from each other. A task with a low harmonic centrality value may be a redundant task that does not contribute much to the project, or a task that consumes many resources or time. A task with high closeness centralization may be a critical task that affects many other tasks or a task that requires considerable resources or attention. *CZ reflects the degree of accessibility or reachability; the HZ reflects the efficiency or effectiveness of some tasks have in the project network.* The similarity between closeness centralization and harmonic centralization is that they both use the inverse of the distances between tasks to measure their closeness. The difference is that closeness centralization uses the arithmetic means of the inverse distances, whereas harmonic centralization uses the harmonic mean of the inverse distances. The harmonic mean is more sensitive to small values than is the arithmetic mean. This fact implies that harmonic centralization gives more weight to the tasks that are far from others, while closeness centralization gives more weight to the tasks that are close to others. Therefore, harmonic centralization can be more useful for detecting outliers or isolated tasks in the network, whereas closeness centralization can be more useful for detecting hubs or central tasks in the network.
+
+
+- **Eigenvector centralization** (EZ): This measures how connected a task is to other well-connected tasks in the network, on the basis of the eigenvector of the adjacency matrix. High eigenvector centralization means that the network is more skewed, with a few tasks having higher eigenvector centrality scores than do the remaining scores. This can indicate that the network has a dominant or complex structure, with some tasks having more dependencies than do others. Low eigenvector centralization means that the network is more balanced, with the tasks having similar eigenvector centrality scores. This can indicate that the network has a democratic or simple structure, with the tasks having equal influence or responsibility. *This indicator reflects the degree of importance that some tasks have in the project network.*
+
+- **PageRank centralization** (PRZ): The PageRank centrality value of a task identifies the tasks that have a high impact on the overall project network. For example, a task with a high PageRank centrality value may be a critical task that affects many other tasks, or a task that requires considerable resources or attention. PRZ measures how influential or critical a task is for overall project performance. A high PageRank centralization means that there are several tasks in which have more impact on other tasks, while a low PageRank centralization means that the tasks are more equally impacted. *This indicator reflects the degree of impact that some tasks have on the project network.*
+
+- **Alpha centralization** (AZ) / **Power centralization** (PZ): This measures how centralized the network is as a whole, on the basis of the alpha /power index. A high alpha/power centralization means that the network is more centralized, while a low alpha centralization means that the network is more decentralized. *This indicator reflects the degree of hierarchy or equality/degree of dominance or balance in the project network structure.*
+
+- **Betweenness centralization** (BZ): This measures how often a task lies on the shortest path between two other tasks. A high betweenness centralization means that there are some tasks that act as bridges or gatekeepers between many other tasks, while a low betweenness centralization means that the tasks are more direct connect to each other. *This indicator reflects the degree of intermediation that some tasks have in the project network, and it may be correlated with the free slack.*
+
+- *Centralization* (Z): The centralization of a network is given by 
+\begin{equation}
+  Z = \frac {\sum_{i \in V} (\max_{j \in V} C_j - C_i)} {(n-1)(n-2)} \label{eq:Z}
+  \end{equation}
+\noindent
+where $V$ is the set of tasks, $n$ is the number of tasks, and \(C_i\) and \(C_j\) are the given centralities of tasks $i$ and $j$, respectively. The closeness/harmonic value PageRank/betweenness centralization can be calculated via the following formula. therefore, the centrality values are formulated as follows:
+
+- **Closeness centrality** (CC) / **Harmonic centrality** (HC): The closeness and harmonic centrality of a task $i$ in a network is given by \begin{eqnarray}
+  CC_i = \frac {n-1} {\sum_{j \in V} d(i,j)} \label{eq:cC} \\
+  HC_i = \sum_{j \in V} \frac {1} {d(i,j)}
+  \end{eqnarray}
+\noindent
+where $V$ is the set of tasks, $n$ is the number of tasks, and $d(i,j)$ is the shortest path distance between tasks $i$ and $j$.
+
+- **Eigenvector centrality** (EC) / **PageRank centrality**
+(PRC): The eigenvector centrality/PageRank centrality of a task $i$ in a network is given by 
+\begin{eqnarray}
+  EC_i = \frac {1} {\lambda} \sum {j \in V} l{ij} EC_j \label{eq:EC}  \\
+  PRC_i = \alpha \sum {j \in V} \frac {l{ji} PRC_j} {k_j^{out}} + \frac {1-\alpha} {n} \label{eq:PRC}
+  \end{eqnarray} 
+\noindent
+where $V$ is the set of tasks, $l_{ij}$ is the element (edge) from the logic domain (adjacency matrix), and \(\lambda\) is the largest eigenvalue of the adjacency matrix, \(k_j^{out}\) is the out-degree of task \(j\), and $\alpha$ is the damping factor.
+
+- **Alpha centrality** (AC), **Power centrality** (PC): The alpha/power centrality of a task $i$ in a network is given by
+\begin{eqnarray}
+  AC_i({\alpha}) = (\mathbf{I} - \alpha \mathbf{A})^{-1} x_i \label{eq:AC} \\
+  PC_i({\alpha},\beta) = \alpha (\mathbf{I} - \beta \mathbf{A})^{-1}\mathbf{A} \label{eq:PC}
+  \end{eqnarray} 
+\noindent
+where $I$ is the identity matrix, $\alpha, \beta$ are the attenuation factors, $\mathbf{A}=\mathbf{LD}$ is the adjacency matrix, and $x_i$ is the exogenous source of task \(i\).
+
+- **Betweenness centrality** (BC): The betweenness centrality of a task $i$ in a network is given by
+\begin{equation}
+  BC_i^{bet} = \sum_{j,k \in V} \frac {\sigma_{jk}(i)} {\sigma_{jk}} \label{eq:BC}
+  \end{equation}
+\noindent
+where $V$ is the set of tasks, $\sigma_{jk}$ is the number of shortest paths between tasks $j$ and $k$, and $\sigma_{jk}(i)$ is the number of shortest paths between tasks $j$ and $k$ that pass through task $i$.
+
+- **Edge-betweenness centralization** (BEZ): This measures how often an edge lies on the shortest path between two tasks. A high edge-betweenness centralization means that there are several edges that act as bridges or bottlenecks between many tasks, while a low edge-betweenness centralization means that the edges are more redundant or dispensable. *This indicator reflects the degree of vulnerability or robustness of the project network.* The  edge-betweenness centrality of a dependency $(i,j)$ in a network is given by 
+\begin{equation}
+  BEC_{ij} = \sum_{k,l \in V} \frac {\sigma_{kl}(i,j)} {\sigma_{kl}}
+  \end{equation}
+\noindent
+where $V$ is the set of tasks, $\sigma_{kl}$ is the number of shortest paths between tasks $k$ and $l$, and $\sigma_{kl}(i,j)$ is the number of shortest paths between tasks $k$ and $l$ that pass through dependency \((i,j)\). The edge-betweenness centralization of a network is given by
+\begin{equation}
+  BEZ = \frac {\sum_{i,j} (BEC_{\max} - BEC_{ij})} {(n-1)(n-2)(n-3)}
+  \label{eq:BEZ}
+  \end{equation}
+\noindent
+where $V$ is the set of tasks, $n$ is the number of tasks, and $BEC_{ij}$ and $BEC_{kl}$ are the edge betweenness centralities of dependencies $(i,j)$ and $(k,l)$, respectively.
+
+- **Resilience for random** (RRes) / **systematic attack** (SRes): This measures how well the network can maintain its connectivity when a fraction of tasks are randomly removed/high degree tasks are removed. High resilience for random/systematic attack means that the network is more robust to random / systematic failures (task exclusions), while a low resilience for random /  systematic attack means that the project network is more susceptible to random/systematic excludes, and in this way, it can be easily collapsed into components. *This indicator reflects the degree of robustness or susceptibility of the project network.* Resilience to random/systematic attack by a network is given by
+\begin{eqnarray}
+  RRes = \frac {S_r} {S_0} \label{eq:RRes}\\
+  SRes = \frac {S_s} {S_0} \label{eq:SRes}
+  \end{eqnarray}
+\noindent
+where $S_r, S_s$ are the sizes of the largest connected components after removing a fraction $r$ and $s$ of tasks, and $S_0$ is the size of the largest connected component before any removal. Fraction $r$ represents the set of randomly selected tasks and $s$ represents the set of high-degree tasks.
+
+- **Average local efficiency** (ALE) / **Global efficiency** (GE): ALE measures the average efficiency of the subgraphs induced by the dependencies of each task in the project network, whereas the GE measures the average efficiency of the network as a whole. The efficiency of a pair of tasks is the multiplicative inverse of the shortest path distance between them. A high average local/global efficiency means that the network is more resilient to local failures (nonexecution of isolated tasks)/failure (nonexecution of highly dependent tasks), whereas a low average local/global efficiency means that the project network is more vulnerable to local/global failures. *This indicator reflects the degree of redundancy or fragility of the project network.* The similarity between these methods is that they both use the inverse of the distances between tasks to measure their efficiency. The difference is that the average local efficiency considers only the dependencies of each task, whereas the global efficiency considers the entire network. Therefore, the average local efficiency captures the local properties of the project network, while global efficiency captures the global properties of the project network. The average local/global efficiency of a network is given by 
+\begin{eqnarray}
+  ALE = \frac {1} {n} \sum_{i \in V} LE_i \label{eq:ALE} \\
+  GE = \frac {1} {n(n-1)} \sum_{i,j \in V} \frac {1} {d(i,j)} \label{eq:GE}
+  \end{eqnarray}
+\noindent 
+where $V$ is the set of tasks, $n$ is the number of tasks, and $LE_i=\frac {1} {k_i(k_i-1)} \sum_{j,h \in V_i} \frac {1} {d(j,h)}$ is the local efficiency of task \(i\), and \(d(i,j)\) is the shortest path distance between tasks $i$ and $j$. $V_i$ is the neighborhood of task $i$, $k_i$ is the number of tasks in the neighborhood of task $i$, and $d(j,h)$ is the shortest path distance between tasks $j$ and $h$ in the subgraph induced by the neighborhood of task $i$.
+
+- **Graph transitivity** (Tra): This measures the ratio of triangles to triplets in a project network. A triangle is a set of three tasks that are all connected to each other by dependencies, whereas a triplet is a set of three tasks that are connected by at least two dependencies. Graph transitivity is calculated by dividing the number of triangles by the number of triplets in the network. A high graph transitivity means that the network has a high clustering coefficient, while a low graph transitivity means that the network has a low clustering coefficient. A high graph transitivity means that the network has a clear community structure, with tasks that are densely   connected to each other within groups and are sparsely connected to each other between groups. This can indicate that the network has a cohesive or modular structure, with tasks that have strong dependencies or influences within groups and weak dependencies or influences between groups. A low graph transitivity means that the project network is more homogeneous or random, with tasks that are equally connected to each other, regardless of the group. This can indicate that the network has a simple or uniform structure, with tasks that have similar dependencies or influences across the network. *This indicator reflects the degree of cliquishness or openness of the project network.* The graph transitivity of a network is given by
+\begin{equation}
+  Tra = \frac {3 \times \text{number of triangles in the network}} {\text{number of connected triples of tasks in the network}} \label{eq:Tra}
+  \end{equation}
+\noindent
+where a triangle is a closed triplet and a connected
+triple is a set of three tasks that are connected by at least two dependencies.
+
+# Employed goodness of fits and accuracy measures
+
+Formal mathematical descriptions of the employed goodness-of-fit and accuracy measures:
+
+**Accuracy**: Accuracy is defined as the proportion of correctly classified instances in a classification problem. Mathematically, it is given by:  
+
+\begin{equation}
+    \text{Accuracy} = \frac{TP + TN}{TP + TN + FP + FN}
+\end{equation}
+
+\noindent
+where $TP$ (true positives) are correctly predicted positive instances; $TN$ (True Negatives) are correctly predicted negative instances; $FP$ (false positives) are incorrectly predicted positive instances; $FN$ (false negatives) are incorrectly predicted negative instances.
+
+- **Significance of accuracy**: The significance of accuracy is evaluated via the statistical test **McNemar’s test** to determine whether the observed accuracy is significantly different from a baseline or random chance. A common approach is to compute the **p-value** associated with the accuracy score.
+
+- **F1 score**: The F1 score is the harmonic mean of precision and recall, balancing both measures. It is defined as:
+
+\begin{equation}
+   F1 = \frac{2 \cdot \text{Precision} \cdot \text{Recall}}{\text{Precision} + \text{Recall}}
+\end{equation}
+
+\noindent
+where: $\text{Precision} = \frac{TP}{TP + FP}$, $\text{Recall} = \frac{TP}{TP + FN}$
+
+- **R-Squared $(R^2)$**:  The coefficient of determination, $R^2$, measures the proportion of variance in the dependent variable that is predictable from the independent variables. It is given by:  
+
+\begin{equation}
+ R^2 = 1 - \frac{\sum (y_i - \hat{y}_i)^2}{\sum (y_i - \bar{y})^2}
+\end{equation}
+
+\noindent
+where: $y_i$ are the actual values; $\hat{y}_i$ are the predicted values; $\bar{y}$ is the mean of the actual values.
+
+- **Eta-Squared $(\eta^2)$**: Eta-squared is a measure of effect size used in ANOVA to quantify the proportion of variance explained by a factor. It is defined as: 
+
+\begin{equation}
+ \eta^2 = \frac{\text{SS}_{\text{effect}}}{\text{SS}_{\text{total}}}
+\end{equation}
+
+\noindent
+where: $\text{SS}_{\text{effect}}$ is the sum of squares for the effect; $\text{SS}_{\text{total}}$ is the total sum of squares.
+
+- **Average silhouette score**: The silhouette score measures the quality of clustering by comparing intra-cluster cohesion and inter-cluster separation. The silhouette coefficient for a single data point $i$ is:
+
+\begin{equation}
+ s(i) = \frac{b(i) - a(i)}{\max(a(i), b(i))}
+\end{equation}
+
+\noindent
+where: $a(i)$ is the average distance between $i$ and other points in the same cluster; $b(i)$ is the average distance between $i$ and points in the nearest neighboring cluster. The **average silhouette score** is computed as the mean of $s(i)$ over all the data points.
+
+
+
+:::
+
